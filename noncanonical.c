@@ -26,10 +26,7 @@ volatile int STOP = FALSE;
 int main(int argc, char** argv)
 {
     // Program usage: Uses either COM1 or COM2
-    if ((argc < 2) ||
-        ((strcmp("/dev/ttyS0", argv[1]) != 0) &&
-         (strcmp("/dev/ttyS1", argv[1]) != 0) ))
-    {
+    if (argc < 2) {
         printf("Incorrect program usage\n"
                "Usage: %s <SerialPort>\n"
                "Example: %s /dev/ttyS1\n",
