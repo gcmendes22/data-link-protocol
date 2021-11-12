@@ -12,7 +12,8 @@
 #include <unistd.h>
 
 typedef struct linkLayer {
-    char serialPort[50];
+    char serialPortTrasmitter[50];
+    char serialPortReceiver[50];
     int role; // defines the role of the program: 0 == Transmitter, 1 == Receiver
     int baudRate;
     int numTries;
