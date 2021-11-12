@@ -26,6 +26,13 @@
 
 volatile int STOP = FALSE;
 
+
+void printArrayHEX(char* array, int length) {
+    for(int i = 0; i < length; i++) {
+        printf("%02x ", array[i]);
+    }
+}
+
 int main(int argc, char** argv)
 {
     // Program usage: Uses either COM1 or COM2
@@ -95,7 +102,7 @@ int main(int argc, char** argv)
 
     int bytes = write(fd, set, strlen(set));
     printf("%d bytes written\n", bytes);
-
+    printArrayHEX(set, 5);
     // The for() cycle and the following instructions should be changed in order to
     // follow specifications of the protocol indicated in the Lab guide.
 

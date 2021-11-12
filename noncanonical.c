@@ -23,6 +23,12 @@
 
 volatile int STOP = FALSE;
 
+void printArrayHEX(char* array, int length) {
+    for(int i = 0; i < length; i++) {
+        printf("%02x ", array[i]);
+    }
+}
+
 int main(int argc, char** argv)
 {
     // Program usage: Uses either COM1 or COM2
@@ -101,6 +107,7 @@ int main(int argc, char** argv)
             if(flag_counter==2){
                 char response[5]={F,A,C,Bcc1,F};
                 int UAbytes=write(fd,response,5);
+                printArrayHEX(response, 5);
                 printf("%d bytes",UAbytes);
             }
         }
