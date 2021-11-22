@@ -3,6 +3,8 @@
     "*.env.development": "env",
     "*.env.production": "env",
     "*.env.local": "env",
-    "stdlib.h": "c"
+    "stdlib.h": "c",
+    "stat.h": "c",
+    "types.h": "c"
   }
 }

@@ -11,7 +11,7 @@
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
-#define BAUDRATE B38400
+#define BAUDRATE B9600
 #define _POSIX_SOURCE 1 // POSIX compliant source
 #define FALSE 0
 #define TRUE 1
@@ -23,16 +23,13 @@
 
 volatile int STOP = FALSE;
 
-void printArrayHEX(char* array, int length) {
-    for(int i = 0; i < length; i++) {
-        printf("%02x ", array[i]);
-    }
-}
-
 int main(int argc, char** argv)
 {
     // Program usage: Uses either COM1 or COM2
-    if (argc < 2) {
+    if ((argc < 2) ||
+        ((strcmp("/dev/ttyS0", argv[1]) != 0) &&
+         (strcmp("/dev/ttyS1", argv[1]) != 0) ))
+    {
         printf("Incorrect program usage\n"
                "Usage: %s <SerialPort>\n"
                "Example: %s /dev/ttyS1\n",
@@ -93,9 +90,9 @@ int main(int argc, char** argv)
     while (STOP == FALSE) {
         // Returns after 5 chars have been input
         int bytes = read(fd, buf, BUF_SIZE);
-        buf[bytes] = '\0';  // Set end of string to '\0', so we can printf
+        
 
-        printf(":%s:%d\n", buf, bytes);
+        printf(":%x %x %x %x %x:%d\n", buf[0],buf[1],buf[2],buf[3],buf[4],bytes);
 
         if (bytes>0){
             int flag_counter=0;
@@ -107,11 +104,10 @@ int main(int argc, char** argv)
             if(flag_counter==2){
                 char response[5]={F,A,C,Bcc1,F};
                 int UAbytes=write(fd,response,5);
-                printArrayHEX(response, 5);
-                printf("%d bytes",UAbytes);
+                 printf(":%x %x %x %x %x:%d\n", response[0],response[1],response[2],response[3],response[4],UAbytes);
             }
+            
         }
-            STOP = TRUE;
     }
 
 

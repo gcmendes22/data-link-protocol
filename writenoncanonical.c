@@ -8,10 +8,11 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
-#define BAUDRATE B38400
+#define BAUDRATE B9600
 #define _POSIX_SOURCE 1 // POSIX compliant source
 #define FALSE 0
 #define TRUE 1
@@ -26,17 +27,25 @@
 
 volatile int STOP = FALSE;
 
+int alarmEnabled = FALSE; 
+int alarmCount = 0; // n tentativas
 
-void printArrayHEX(char* array, int length) {
-    for(int i = 0; i < length; i++) {
-        printf("%02x ", array[i]);
-    }
+void alarmHandler(int signal)
+{
+    alarmEnabled = FALSE;
+    alarmCount++;
+
+    printf("Alarm #%d\n", alarmCount);
 }
+
 
 int main(int argc, char** argv)
 {
     // Program usage: Uses either COM1 or COM2
-    if (argc < 2) {
+    if ((argc < 2) ||
+        ((strcmp("/dev/ttyS0", argv[1]) != 0) &&
+         (strcmp("/dev/ttyS1", argv[1]) != 0)))
+    {
         printf("Incorrect program usage\n"
                "Usage: %s <SerialPort>\n"
                "Example: %s /dev/ttyS1\n",
@@ -91,18 +100,41 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 
-    // Create SET trama to initialize the comunication
-    // char buf[BUF_SIZE];
+    // Create string to send
+    char buf[BUF_SIZE];
     char set[5] = { F, A, C, BCC, F };
+    //printf("Escreva uma string: ");
+    //scanf("%s", buf);
 
     // In non-canonical mode, '\n' does not end the writing.
     // Test this condition by placing a '\n' in the middle of the buffer.
     // buf[25] = '\n';
-    // buf[strlen(buf)] = '\0';
+    buf[strlen(buf)] = '\0';
 
-    int bytes = write(fd, set, strlen(set));
-    printf("%d bytes written\n", bytes);
-    printArrayHEX(set, 5);
+    (void) signal(SIGALRM, alarmHandler);
+
+    while (alarmCount < 4) {
+        int bytes = write(fd, set, strlen(set));
+        printf("%d bytes written\n", bytes);
+        for(int i = 0; i < 5; i++) printf("%x ", set[i]);
+        putchar('\n');
+        if (alarmEnabled == FALSE) {
+            alarm(3);  // Set alarm to be triggered in 3s
+            alarmEnabled = TRUE;
+        }
+        char bufUA[5];
+        int UAbytes = read(fd, bufUA, 5);
+        char UA[5] = { F, 0x02, 0x07, 0x02^0x07, F};
+        int count = 0;
+        if(UAbytes == 5) {
+            int x;
+            for(x = 0; x < UAbytes; x++) return 1;
+                if(bufUA[x] == UA[x]) count++;
+        }
+
+    }
+
+
     // The for() cycle and the following instructions should be changed in order to
     // follow specifications of the protocol indicated in the Lab guide.
 
