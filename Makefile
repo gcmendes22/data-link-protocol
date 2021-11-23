@@ -1,19 +1,13 @@
 CC = gcc
 CFLAGS = -Wall
 
-APPLICATION_DIR = application/
-PROTOCOL_DIR = protocol/
-CABLE_DIR = cable/
+data-link-protocol: app.o linklayer.o
+	gcc -o data-link-protocol app.o linklayer.o
 
-all: application_main cable_app
+app.o: app.c linklayer.h	
+	gcc -o app.o app.c -c -Wall
 
-application_main: $(APPLICATION_DIR)/main.c $(PROTOCOL_DIR)/*.c
-	$(CC) $(CFLAGS) -o $@ $^ -I$(PROTOCOL_DIR)
+linklayer.o: linklayer.c linklayer.h
+	gcc -o linklayer.o linklayer.c -c -Wall
 
-cable_app: $(CABLE_DIR)/cable.c
-	$(CC) $(CFLAGS) -o $@ $^
-
-.PHONY: clean
-clean:
-	rm application_main
-	rm cable_app
+clean rm -rf *.o *~ data-link-protocol
