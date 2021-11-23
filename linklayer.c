@@ -58,7 +58,7 @@ int llopen(linkLayer connectionParameters) {
         perror("tcsetattr");
         return ERROR;
     }
-
+    printf(connectionParameters.role == TRANSMITTER ? "Openning as tranmitter\n" : "Openning as receiver\n");
     printf("New termios structure set\n");
 
     if(connectionParameters.role == NOT_DEFINED) {
