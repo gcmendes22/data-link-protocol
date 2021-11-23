@@ -1,33 +1,22 @@
-// Alarm example
-
-#include <unistd.h>
-#include <signal.h>
 #include <stdio.h>
+#include <signal.h>
+#include <unistd.h>
 
-#define FALSE 0
-#define TRUE 1
-
-int alarmEnabled = FALSE;
+int alarmEnabled = 0;
 int alarmCount = 0;
 
-// Alarm function handler
-void alarmHandler(int signal)
-{
-    alarmEnabled = FALSE;
+void alarmHandler(int signal) {
+    alarmEnabled = 0;
     alarmCount++;
-
     printf("Alarm #%d\n", alarmCount);
 }
 
-int main()
-{
-    // Set alarm function handler
+int main(void) {
     (void) signal(SIGALRM, alarmHandler);
-
-    while (alarmCount < 4) {
-        if (alarmEnabled == FALSE) {
-            alarm(3);  // Set alarm to be triggered in 3s
-            alarmEnabled = TRUE;
+    while(alarmCount < 4) {
+        if(alarmEnabled == 0) {
+            alarm(3);
+            alarmEnabled = 1;
         }
     }
 
