@@ -10,4 +10,5 @@ app.o: app.c linklayer.h
 linklayer.o: linklayer.c linklayer.h
 	gcc -o linklayer.o linklayer.c -c -Wall
 
-clean rm -rf *.o *~ data-link-protocol
+clean:
+	rm -rf *.o *~ data-link-protocol
