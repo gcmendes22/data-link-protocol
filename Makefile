@@ -1,6 +1,8 @@
 CC = gcc
 CFLAGS = -Wall
 
+all: data-link-protocol
+
 data-link-protocol: app.o linklayer.o
 	gcc -o data-link-protocol app.o linklayer.o
 
