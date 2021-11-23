@@ -31,7 +31,7 @@ int llopen(linkLayer connectionParameters) {
     newtio.c_oflag = 0;
 
     newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 0;
+    newtio.c_cc[VTIME] = 5;
     newtio.c_cc[VMIN] = 0;
 
     tcflush(fd, TCIOFLUSH);
@@ -59,6 +59,7 @@ int llopen(linkLayer connectionParameters) {
         getSETTrama(fd);
         sendUATrama(fd);
         printf("The receiver just receive the SET trama and sent the UA trama as confirmation.\n");
+        return TRUE;
     }
 
     return ERROR;
