@@ -49,16 +49,12 @@ int llopen(linkLayer connectionParameters) {
     }
 
     if(connectionParameters.role == TRANSMITTER) {
-        if(sendSETTrama(fd)) {
-            printf("The transmitter just sent the SET trama.\n");
-            return TRUE;
-        }
+        if(sendSETTrama(fd) == TRUE) return TRUE;
     }
 
     if(connectionParameters.role == RECEIVER) {
         getSETTrama(fd);
         sendUATrama(fd);
-        printf("The receiver just receive the SET trama and sent the UA trama as confirmation.\n");
         return TRUE;
     }
 

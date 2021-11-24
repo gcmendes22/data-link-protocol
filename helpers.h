@@ -26,8 +26,8 @@ int sendSETTrama(int fd);
 
 void getSETTrama(int fd);
 
-void receptionSETMessage(enum State* state, char flag);
+void stateMachineSETMessage(enum State* state, char flag);
 
-void receptionUAMessage(enum State* state, char flag);
+void stateMachineUAMessage(enum State* state, char flag);
 
 #endif // !HELPERS_H

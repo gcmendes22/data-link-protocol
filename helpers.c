@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 
-int alarmEnabled = 0;
+int alarmEnabled = 1;
 int alarmCount = 0;
 
 void startAlarm() {
@@ -11,8 +11,6 @@ void startAlarm() {
 
 void alarmHandler(int signal) {
     alarmEnabled = 1;
-    alarmCount++;
-
     printf("Alarm #%d\n", alarmCount);
 }
 
@@ -28,26 +26,25 @@ int sendSETTrama(int fd) {
     char flag;
     enum State state = START;
     startAlarm();
-    while(alarmCount < 4) {
-        int bytesSET = write(fd, set, 5);
-        printf("%d bytes written\n", bytesSET);
+    do {
+        write(fd, set, 5);
 
-        if(alarmEnabled == 0) {
+        if(alarmEnabled) {
             alarm(3);
-            alarmEnabled = 1;
+            alarmEnabled = 0;
         }
 
         while(state != DONE && alarmEnabled == 0) {
             read(fd, &flag, 1);
-            receptionSETMessage(&state, flag);
+            stateMachineSETMessage(&state, flag);
         }
 
-        if(state == DONE) return 0;
+        if(state == DONE) return 1;
 
         alarmCount++;
-    }
+    } while (alarmCount < 4);
 
-    return 1;
+    return -1;
 }
 
 void getSETTrama(int fd) {
@@ -56,12 +53,12 @@ void getSETTrama(int fd) {
     int currentState = 0;
     while(state != DONE) {
         read(fd, &flag, 1);
-        receptionUAMessage(&state, flag);
+        stateMachineUAMessage(&state, flag);
         currentState++;
     }
 }
 
-void receptionSETMessage(enum State* state, char flag) {
+void stateMachineSETMessage(enum State* state, char flag) {
     switch(*state) {
         case START: 
             if(flag == F) *state = FLAG_RCV;
@@ -94,7 +91,7 @@ void receptionSETMessage(enum State* state, char flag) {
     }
 }
 
-void receptionUAMessage(enum State* state, char flag) {
+void stateMachineUAMessage(enum State* state, char flag) {
     switch(*state) {
         case START: 
             if(flag == F) *state = FLAG_RCV;
