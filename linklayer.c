@@ -7,10 +7,19 @@
 #define BUF_SIZE 2008
 
 volatile int STOP = FALSE;
+char read_data[BUF_SIZE];
+int fd;ters.numTries;
+    connection.timeOut =connectionParamet
+struct linkLayer connection;
+char *Tramas_lidas[1000];
+int read_count=0;
 
 
-int llopen(linkLayer connectionParameters) {    
-    int fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY );
+int llopen(linkLayer connectionParameters) { 
+
+    connection.role = connectionParameters.role;
+    connection.numTries =connectionParameers.timeOut;
+    fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY );
     if (fd < 0) {
         perror("Error: cannot open the serial port.");
         return ERROR;
@@ -49,7 +58,9 @@ int llopen(linkLayer connectionParameters) {
     }
 
     if(connectionParameters.role == TRANSMITTER) {
-        if(sendSETTrama(fd) == TRUE) return TRUE;
+        if(sendSETTrama(fd) == TRUE){ 
+            return TRUE;
+        }
     }
 
     if(connectionParameters.role == RECEIVER) {
@@ -60,3 +71,11 @@ int llopen(linkLayer connectionParameters) {
 
     return ERROR;
 }
+
+int llread(char *package){
+    int read_bytes=read(fd,package,MAX_PAYLOAD_SIZE)
+    for(int i=0,i++,i<read_count){
+        if(package[2]==)
+    }
+}
+
