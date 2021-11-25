@@ -73,9 +73,18 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-    int read_bytes=read(fd,package,MAX_PAYLOAD_SIZE)
-    for(int i=0,i++,i<read_count){
-        if(package[2]==)
+    int read_bytes=read(fd,package,MAX_PAYLOAD_SIZE);
+
+    for(int i=0;i<read_count;i++){
+
+        if(package[2]==Tramas_lidas[i])
+        {
+            memset(package, 0, read_bytes);
+            return read_bytes;
+        }
     }
+    
+
 }
+
 
