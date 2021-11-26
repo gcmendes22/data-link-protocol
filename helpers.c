@@ -58,6 +58,25 @@ void getSETTrama(int fd) {
     }
 }
 
+void sendRRtrama(char controlo,int fd){
+
+    char C= RR_C + (controlo << 4);
+    char buffer[5] = { F, ACK_A , C , ACK_A^C , F };
+    int bytes_RR = write(fd, buffer, 5);
+    printf("bytes enviados %d\n",bytes_RR);
+
+}
+
+void sendREJtrama(char controlo,int fd){
+
+    char C= REJ_C + (controlo << 4);
+    char buffer[5] = { F, ACK_A , C , ACK_A^C , F };
+    int bytes_REJ = write(fd, buffer, 5);
+    printf("bytes enviados %d\n",bytes_REJ);
+    
+}
+
+
 void stateMachineSETMessage(enum State* state, char flag) {
     switch(*state) {
         case START: 
