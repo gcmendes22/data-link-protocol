@@ -26,6 +26,10 @@ int sendSETTrama(int fd);
 
 void getSETTrama(int fd);
 
+void sendREJtrama(char controlo,int fd);
+
+void sendRRtrama(char controlo,int fd);
+
 void stateMachineSETMessage(enum State* state, char flag);
 
 void stateMachineUAMessage(enum State* state, char flag);
