@@ -11,18 +11,18 @@ void startAlarm() {
 
 void alarmHandler(int signal) {
     alarmEnabled = 1;
-    printf("Alarm #%d\n", alarmCount);
+    printf("Attempt %d\n", alarmCount);
 }
 
 
 void sendUATrama(int fd) {
-    char ua[5] = { F, UA_A, UA_C, UA_BCC, F };
+    char ua[5] = { F, A_RX, C_UA, BCC_UA, F };
     int bytesUA = write(fd, ua, 5);
     printf("%d bytes written\n", bytesUA);
 }
 
 int sendSETTrama(int fd) {
-    char set[5] = { F, SET_A, SET_C, SET_BCC, F };
+    char set[5] = { F, A_TX, C_SET, BCC_SET, F };
     char flag;
     enum State state = START;
     startAlarm();
@@ -58,6 +58,7 @@ void getSETTrama(int fd) {
     }
 }
 
+
 void sendRRtrama(char controlo,int fd){
 
     char C= RR_C + (controlo << 4);
@@ -85,19 +86,19 @@ void stateMachineSETMessage(enum State* state, char flag) {
         
         case FLAG_RCV: 
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == UA_A) *state = A_RCV;
+            else if(flag == A_RX) *state = A_RCV;
             else *state = START;
             break;
         
         case A_RCV:
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == UA_C) *state = C_RCV;
+            else if(flag == C_UA) *state = C_RCV;
             else *state = START;
             break;
         
         case C_RCV:
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == (UA_BCC)) *state = BCC_OK;
+            else if(flag == (BCC_UA)) *state = BCC_OK;
             else *state = START;            
             break;
         
@@ -118,19 +119,19 @@ void stateMachineUAMessage(enum State* state, char flag) {
         
         case FLAG_RCV: 
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == SET_A) *state = A_RCV; // provavelmente é SET_A
+            else if(flag == A_TX) *state = A_RCV; // provavelmente é SET_A
             else *state = START;
             break;
         
         case A_RCV:
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == SET_C) *state = C_RCV;
+            else if(flag == C_SET) *state = C_RCV;
             else *state = START;
             break;
         
         case C_RCV:
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == (SET_BCC)) *state = BCC_OK;
+            else if(flag == (BCC_SET)) *state = BCC_OK;
             else *state = START;            
             break;
         

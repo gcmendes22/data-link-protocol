@@ -8,8 +8,7 @@
 
 volatile int STOP = FALSE;
 char read_data[BUF_SIZE];
-int fd;ters.numTries;
-    connection.timeOut =connectionParamet
+int fd;
 struct linkLayer connection;
 char *Tramas_lidas[1000];
 int read_count=0;
@@ -18,7 +17,7 @@ int read_count=0;
 int llopen(linkLayer connectionParameters) { 
 
     connection.role = connectionParameters.role;
-    connection.numTries =connectionParameers.timeOut;
+    connection.numTries =connectionParameters.timeOut;
     fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY );
     if (fd < 0) {
         perror("Error: cannot open the serial port.");
@@ -53,7 +52,7 @@ int llopen(linkLayer connectionParameters) {
     printf("New termios structure set\n");
 
     if(connectionParameters.role == NOT_DEFINED) {
-        perror("Error: role was not defined");
+        perror("Error: role was not defined.\n");
         return ERROR;
     }
 
@@ -127,3 +126,25 @@ int llread(char *package){
     return package_pos ;
 }
 
+
+int llclose(int showStatistics) {
+    int role = connection.role;
+
+    if(role == NOT_DEFINED) {
+        perror("Error: role was not defined.\n");
+        return ERROR;
+    }
+
+    char disc[5] = { F, A_TX, C_DISC, BCC_DISC, F };
+    char ua[5] = { F, A_RX, C_UA, BCC_UA, F };
+
+    if (role == TRANSMITTER) {
+        
+    }
+
+    if (role == RECEIVER) {
+
+    }
+    
+    return 1;
+}

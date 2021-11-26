@@ -5,14 +5,19 @@
 
 #include <unistd.h>
 
-// Open connection tramas (SET and UA)
+// tramas
 #define F 0x7E
-#define SET_A 0x05
-#define SET_C 0x03
-#define SET_BCC SET_A^SET_C
-#define UA_A 0x02
-#define UA_C 0x07
-#define UA_BCC UA_A^UA_C
+
+#define A_TX 0x05
+#define A_RX 0x02
+
+#define C_SET 0x03
+#define C_UA 0x07
+#define C_DISC 0x0B
+
+#define BCC_SET A_TX^C_SET
+#define BCC_UA A_RX^C_UA
+#define BCC_DISC A_TX^C_DISC
 
 // Acknowledge conection tramas(RR and REJ)
 #define ACK_A 0x02
@@ -34,6 +39,10 @@ void getSETTrama(int fd);
 void sendREJtrama(char controlo,int fd);
 
 void sendRRtrama(char controlo,int fd);
+
+int sendDISCTrama(int fd);
+
+void getDISCTrama(int fd);
 
 void stateMachineSETMessage(enum State* state, char flag);
 
