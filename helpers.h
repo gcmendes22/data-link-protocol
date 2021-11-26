@@ -21,8 +21,8 @@
 
 // Acknowledge conection tramas(RR and REJ)
 #define ACK_A 0x02
-#define RR_C 0x01
-#define REJ_C 0x05
+#define C_RR 0x01
+#define C_REJ 0x05
 
 enum State { START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, DONE };
 
