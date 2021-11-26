@@ -73,18 +73,57 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-    int read_bytes=read(fd,package,MAX_PAYLOAD_SIZE);
 
-    for(int i=0;i<read_count;i++){
 
-        if(package[2]==Tramas_lidas[i])
+    int frame_pos=0,package_pos=0,controlo;
+    char buffer[BUF_SIZE];
+    int bytes_read = read(fd,buffer,MAX_PAYLOAD_SIZE);
+
+    if(bytes_read <= 0) return -1;
+
+    if(buffer[0] != F) return -1; //Vê se o primeiro elemento é a flag pretendida
+
+    while(buffer[frame_pos] == F) frame_pos++;  //avança até terminarem as flags no header(até o adress)
+
+    if(buffer[frame_pos] != 0x05) return -1; //verifica se o adress é o pretendido
+
+    frame_pos++;            // avança para o controlo do header
+    controlo=frame_pos;         
+
+    for(int i=0;i<read_count;i++){      //verifica se a trama é repetida
+
+        if(buffer[controlo]==Tramas_lidas[i])       //se for envia ACK sem alterar o pacote
         {
-            memset(package, 0, read_bytes);
-            return read_bytes;
+            sendRRtrama(buffer[controlo],fd);
+            return 0;
         }
     }
+
+    read_count++;
+    realloc(Tramas_lidas,sizeof(char)*read_count);
+    Tramas_lidas[read_count-1] = buffer[controlo];   //grava o numero de sequência;
     
+    frame_pos=frame_pos+2;      //avança para a data do pacote
+    
+    
+    while(buffer[frame_pos+1] != F){    //neste ciclo preenche-se o pacote com a data pretendida
 
+        if(frame_pos ==  bytes_read){   //se a data esta corrompida pede para o pacote ser enviado de novo;
+
+            Tramas_lidas[read_count-1]= 0;
+            read_count--;
+            memset(package,0,package_pos+1);
+            sendREJtrama(buffer[controlo],fd);
+            return 0;
+
+        }
+
+        package[package_pos]=buffer[frame_pos];
+        frame_pos++;
+        package_pos++;
+    }
+
+    sendRRtrama(buffer[controlo],fd); //manda o ACK
+    return package_pos ;
 }
-
 
