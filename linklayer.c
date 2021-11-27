@@ -139,12 +139,18 @@ int llclose(int showStatistics) {
     char ua[5] = { F, A_RX, C_UA, BCC_UA, F };
 
     if (role == TRANSMITTER) {
-        
+        if(sendDISCTrama(fd) == TRUE) {
+            if(getDISCTrama(fd) == TRUE)
+                sendUATrama(fd);
+        }
+        return 1;
     }
 
     if (role == RECEIVER) {
-
+        if(getDISCTrama(fd) == TRUE)
+            sendDISCTrama(fd);
+        return 1;
     }
     
-    return 1;
+    return -1;
 }

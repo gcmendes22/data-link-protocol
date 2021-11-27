@@ -17,9 +17,16 @@ int main(int argc, char **argv){
         fprintf(stderr, "Could not initialize link layer connection\n");
         return -1;
     }
-
 	
-    printf("connection opened\n");
+    printf("Connection opened successfuly\n");
 	fflush(stdout);
     fflush(stderr);
+
+
+    if(llclose(TRUE) < 0) {
+        fprintf(stderr, "Could not close the link layer connection\n");
+        return -1;
+    }
+    printf("Connection closed successfuly\n");
+    return 0;
 }

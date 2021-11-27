@@ -42,10 +42,14 @@ void sendRRtrama(char controlo,int fd);
 
 int sendDISCTrama(int fd);
 
-void getDISCTrama(int fd);
+int getDISCTrama(int fd);
 
 void stateMachineSETMessage(enum State* state, char flag);
 
 void stateMachineUAMessage(enum State* state, char flag);
+
+void stateMachineDISCMessageTransmitter(enum State* state, char flag);
+
+void stateMachineDISCMessageReceiver(enum State* state, char flag);
 
 #endif // !HELPERS_H
