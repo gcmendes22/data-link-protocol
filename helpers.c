@@ -60,8 +60,6 @@ void getSETTrama(int fd) {
 }
 
 int sendDISCTramaTransmitter(int fd) {
-    
-
     char disc[5] = { F, A_TX, C_DISC, BCC_DISC, F };
     char flag;
     enum State state = START;
@@ -155,7 +153,6 @@ int getDISCTramaReceiver(int fd) {
     return -1;
 }
 
-
 void sendRRtrama(char controlo,int fd){
 
     char C= C_RR + (controlo << 4);
@@ -175,11 +172,9 @@ void sendREJtrama(char controlo,int fd){
 }
 
 char* createFrameI(char* buf, int bufSize) {
-    char* frameI;
-
+   
     
-    
-    return frameI;
+    return NULL;
 }
 
 
@@ -253,31 +248,37 @@ void stateMachineDISCMessageTransmitter(enum State* state, char flag) {
     switch(*state) {
         case START: 
             if(flag == F) *state = FLAG_RCV;
+            printf("START %x\n", flag);
             break;
         
         case FLAG_RCV: 
             if(flag == F) *state = FLAG_RCV;
             else if(flag == A_TX) *state = A_RCV;
             else *state = START;
+            printf("FLAG_RCV %x\n", flag);
             break;
         
         case A_RCV:
             if(flag == F) *state = FLAG_RCV;
             else if(flag == C_DISC) *state = C_RCV;
             else *state = START;
+            printf("A_RCV %x\n", flag);
             break;
         
         case C_RCV:
             if(flag == F) *state = FLAG_RCV;
             else if(flag == (BCC_DISC)) *state = BCC_OK;
-            else *state = START;            
+            else *state = START;    
+            printf("C_RCV %x\n", flag);        
             break;
         
         case BCC_OK:
             if(flag == F) *state = DONE;
+            printf("BCC_OK %x\n", flag);
             break;
 
         case DONE:
+            printf("DONE %x\n", flag);
             break;
     }
 }

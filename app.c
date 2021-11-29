@@ -22,7 +22,8 @@ int main(int argc, char **argv){
 	fflush(stdout);
     fflush(stderr);
 
-
+    int op;
+    scanf("%d", &op);
     if(llclose(TRUE) < 0) {
         fprintf(stderr, "Could not close the link layer connection\n");
         return -1;

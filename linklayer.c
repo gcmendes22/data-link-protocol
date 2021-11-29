@@ -167,8 +167,6 @@ int llwrite(char* buf, int bufSize) {
     createFrameI(buf, bufSize);
 }
 
-
-
 int llclose(int showStatistics) {
     int role = connection.role;
 
@@ -177,20 +175,17 @@ int llclose(int showStatistics) {
         return ERROR;
     }
 
-    char disc[5] = { F, A_TX, C_DISC, BCC_DISC, F };
-    char ua[5] = { F, A_RX, C_UA, BCC_UA, F };
-
     if (role == TRANSMITTER) {
-        if(sendDISCTramaTransmitter(fd) == TRUE) return 1;
+        if(sendDISCTramaTransmitter(fd) == TRUE) return TRUE;
+        return ERROR;
  
     }
 
     if (role == RECEIVER) {
         if(getDISCTramaReceiver(fd) == TRUE) {
-            return 1;
+            return TRUE;
         }
+        return ERROR;
 
     }
-
-    return ERROR;
 }
