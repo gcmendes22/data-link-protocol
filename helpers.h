@@ -40,9 +40,15 @@ void sendREJtrama(char controlo,int fd);
 
 void sendRRtrama(char controlo,int fd);
 
-int sendDISCTrama(int fd);
+int sendDISCTramaTransmitter(int fd);
 
-int getDISCTrama(int fd);
+int sendDISCTramaReceiver(int fd);
+
+int getDISCTramaTransmitter(int fd);
+
+int getDISCTramaReceiver(int fd);
+
+char* createFrameI(char* buf, int bufSize);
 
 void stateMachineSETMessage(enum State* state, char flag);
 
