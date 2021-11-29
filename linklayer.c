@@ -74,7 +74,7 @@ int llopen(linkLayer connectionParameters) {
 int llread(char *package){
 
 
-    int frame_pos=0,package_pos=0,controlo;
+    int frame_pos=0,package_pos=0,controlo,stuffing_pos;
     char buffer[BUF_SIZE];
     int bytes_read = read(fd,buffer,MAX_PAYLOAD_SIZE);
 
@@ -108,13 +108,13 @@ int llread(char *package){
     while(buffer[frame_pos+1] != F){    //neste ciclo preenche-se o pacote com a data pretendida
 
         if(frame_pos ==  bytes_read){   //se a data esta corrompida pede para o pacote ser enviado de novo;
-
-            Tramas_lidas[read_count-1]= 0;
-            read_count--;
+            
             memset(package,0,package_pos+1);
             sendREJtrama(buffer[controlo],fd);
-            return 0;
-
+            bytes_read=0;
+            while(bytes_read<=0) bytes_read=read(fd,buffer,MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta
+            package_pos=0;
+            frame_pos=controlo+2;
         }
 
         package[package_pos]=buffer[frame_pos];
@@ -122,13 +122,52 @@ int llread(char *package){
         package_pos++;
     }
 
+    for(int i=0;i<package_pos;i++){   // repara todos os possiveis bytes alterados
+        if(package[i]==0x7d){
+            i++;
+
+            if(package[i]==0x5e){  // se o byte for 0x7e
+                package[i-1]=F;
+                stuffing_pos=i;
+                i++;
+
+                while(i<package_pos){ // se o byte for 0x7d
+                 
+                    package[i-1]=package[i];
+                    i++;
+
+                }
+                package_pos--;
+                i=stuffing_pos;
+            }
+
+            else if(package[i]==0x5d){
+                stuffing_pos=i;
+                i++;
+
+                while(i<package_pos){ // coloca as posiçôes todas um passo para a diretia
+                 
+                    package[i-1]=package[i];
+                    i++;
+
+                }
+
+                package_pos--;
+                i=stuffing_pos;
+            }
+        }
+
+    }
+
     sendRRtrama(buffer[controlo],fd); //manda o ACK
-    return package_pos ;
+    return package_pos;
 }
 
 int llwrite(char* buf, int bufSize) {
     createFrameI(buf, bufSize);
 }
+
+
 
 int llclose(int showStatistics) {
     int role = connection.role;
@@ -152,6 +191,6 @@ int llclose(int showStatistics) {
         }
 
     }
-    
+
     return ERROR;
 }
