@@ -59,8 +59,9 @@ void getSETTrama(int fd) {
     }
 }
 
-int sendDISCTrama(int fd) {
-    printf("DISC was sent\n");
+int sendDISCTramaTransmitter(int fd) {
+    
+
     char disc[5] = { F, A_TX, C_DISC, BCC_DISC, F };
     char flag;
     enum State state = START;
@@ -70,7 +71,7 @@ int sendDISCTrama(int fd) {
 
         if(alarmEnabled) {
             alarm(3);
-            alarmEnabled = 0;
+            alarmEnabled = 0; 
         }
 
         while(state != DONE && alarmEnabled == 0) {
@@ -78,17 +79,48 @@ int sendDISCTrama(int fd) {
             stateMachineDISCMessageTransmitter(&state, flag);
         }
 
-        if(state == DONE) return 1;
-
+        if(state == DONE) {
+            printf("DISC was sent by transmitter\n");
+            return 1;
+        }
         alarmCount++;
     } while (alarmCount < 4);
-    
 
     return -1;
 }
 
-int getDISCTrama(int fd) {
-    printf("DISC was received\n");
+int sendDISCTramaReceiver(int fd) {
+    
+    char disc[5] = { F, A_RX, C_DISC, BCC_DISC, F };
+    char flag;
+    enum State state = START;
+    startAlarm();
+    do {
+        write(fd, disc, 5);
+
+        if(alarmEnabled) {
+            alarm(3);
+            alarmEnabled = 0; 
+        }
+
+        while(state != DONE && alarmEnabled == 0) {
+            read(fd, &flag, 1);
+            stateMachineDISCMessageReceiver(&state, flag);
+        }
+
+        if(state == DONE) {
+            printf("DISC was sent by receiver\n");
+            return 1;
+        }
+        alarmCount++;
+    } while (alarmCount < 4);
+
+    return -1;
+}
+
+
+int getDISCTramaTransmitter(int fd) {
+
     enum State state = START;
     char flag;
     int currentState = 0;
@@ -98,7 +130,29 @@ int getDISCTrama(int fd) {
         currentState++;
     }
     
-    return 1;
+    if(state == DONE) {
+        printf("Transmitter received DISC\n");
+        return 1;
+    }
+    return -1;
+}
+
+
+int getDISCTramaReceiver(int fd) {
+
+    enum State state = START;
+    char flag;
+    int currentState = 0;
+    while(state != DONE) {
+        read(fd, &flag, 1);
+        stateMachineDISCMessageTransmitter(&state, flag);
+        currentState++;
+    }
+    if(state == DONE){
+        printf("Receiver received DISC\n");
+        return 1;
+    }
+    return -1;
 }
 
 
@@ -118,6 +172,14 @@ void sendREJtrama(char controlo,int fd){
     int bytes_REJ = write(fd, buffer, 5);
     printf("bytes enviados %d\n",bytes_REJ);
     
+}
+
+char* createFrameI(char* buf, int bufSize) {
+    char* frameI;
+
+    
+    
+    return frameI;
 }
 
 
@@ -195,7 +257,7 @@ void stateMachineDISCMessageTransmitter(enum State* state, char flag) {
         
         case FLAG_RCV: 
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == A_RX) *state = A_RCV;
+            else if(flag == A_TX) *state = A_RCV;
             else *state = START;
             break;
         
@@ -228,7 +290,7 @@ void stateMachineDISCMessageReceiver(enum State* state, char flag) {
         
         case FLAG_RCV: 
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == A_TX) *state = A_RCV;
+            else if(flag == A_RX) *state = A_RCV;
             else *state = START;
             break;
         
