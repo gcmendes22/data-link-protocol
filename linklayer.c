@@ -44,6 +44,7 @@ int read_count=0;
 int alarmEnabled = 1;
 int alarmCount = 0;
 int sendNumber = 0;
+int readNumber = 0;
 
 enum State { START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, DONE };
 
@@ -154,7 +155,113 @@ int llopen(linkLayer connectionParameters) {
 
 int llread(char *package){
 
+    int state = 0, tries = 0, res = 0, done = 0, buffer[2008];
+    char bcc = 0x00;
+    char disc[5], rr[5], rej[5], rrLost[5];
 
+    generateSUTrama(disc, A_TX, C_DISC);
+
+    while(!done) {
+        switch(state) {
+            case 0:
+                if((res = (read(fd, buffer, 5))) < 0) {
+                    if(tries < connection.numTries) {
+                        tries++;
+                        state = 6;
+                    } else {
+                        printf("Number of tries exceeded the limit\n");
+                        return ERROR;
+                    }
+                } else {
+                    //if(buffer[2] != C_SET && buffer[2] != C_UA && buffer[2] != C_DISC)
+                    state = 1;
+                }
+                break;
+            case 1:
+                if(buffer[3] != (buffer[1]^buffer[2])) {
+                    state = 6;
+                    break;
+                }
+                state = 2;
+                break;
+            case 2:
+                if(memcmp(buffer, disc, 5) == 0) return 2;
+                else state = 3;
+                break;
+            case 3:
+                for(int i = 4; i < res - 1; i++) {
+                    if(buffer[i] == 0x7D && (buffer[i+1] == 0x5E || buffer[i+1] == 0x5D)) {
+                        if(buffer[i+1] == 0x5E) buffer[i] = F;
+                        else if(buffer[i+1] == 0x5D) buffer[i] = 0x7D;
+                        for(int j = i + 1; j < res -1;  j++) buffer[j] = buffer[j+1];
+                        res--;
+                    }
+                }
+                state = 4;
+                break;
+            case 4:
+                bcc = buffer[4];
+                for(int i = 5; i < res - 2; i++) bcc ^=buffer[i];
+                if(bcc != buffer[res-2]) {
+                    state = 6;
+                    break;
+                }
+                state = 5;
+                break;
+            case 5:
+                if(buffer[2] == C_I_S0 && readNumber == 0) {
+                    readNumber = 1;
+                    generateSUTrama(rr, A_TX, C_RR_R1);
+                } else if(buffer[2] == C_I_S1 && readNumber == 1) {
+                    readNumber = 0;
+                    generateSUTrama(rr, A_TX, C_RR_R0);
+                } else {
+                    state = 7;
+                    break;
+                }
+                int i, j;
+                for(i = 0, j = 0; i < res - 2; i++, j++) package[j] = buffer[i];
+                tcflush(fd, TCIOFLUSH);
+                if(write(fd, rr, 5) < 0) {
+                    printf("ERROR: Cannot write RR\n");
+                    return -1;
+                }
+                done = 1;
+                break;
+            case 6:
+                if(res == -1) {
+                    if(readNumber == 0) generateSUTrama(rej, A_TX, C_REJ_R0);
+                    else if(readNumber == 1) generateSUTrama(rej, A_TX, C_REJ_R1); 
+                } else {
+                    if(buffer[2] == C_I_S0 && readNumber == 0) generateSUTrama(rej, A_TX, C_REJ_R0);
+                    else if(buffer[2] == C_I_S1 && readNumber == 1) generateSUTrama(rej, A_TX, C_REJ_R1);
+                }
+
+                tcflush(fd, TCIOFLUSH);
+                if(write(fd, rej, 5) < 0) {
+                    perror("REJ WRITE");
+                    return ERROR;
+                }
+                state = 0;
+                break;
+            case 7:
+                if(buffer[2] == C_I_S0 && readNumber == 1) generateSUTrama(rrLost, A_TX, C_REJ_R1);
+                else if(buffer[2] == C_I_S1 && readNumber == 0) generateSUTrama(rrLost, A_TX, C_REJ_R0);
+
+                tcflush(fd, TCIOFLUSH);
+                if(write(fd, rrLost, 5) < 0) {
+                    perror("llwrite() LOST");
+                    return ERROR;
+                }
+                memset(buffer, 0, 2008);
+                return -2;
+            
+            default: break;
+        }
+    }
+    return (res-6);
+
+/* 
     int frame_pos=0,package_pos=0,controlo,stuffing_pos;
     char buffer[BUF_SIZE];
     int bytes_read = read(fd,buffer,MAX_PAYLOAD_SIZE);
@@ -241,7 +348,7 @@ int llread(char *package){
     }
 
     sendRRtrama(buffer[controlo],fd); //manda o ACK
-    return package_pos;
+    return package_pos; */
 }
 
 int llwrite(char* buf, int bufSize) {
