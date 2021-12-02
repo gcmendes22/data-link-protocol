@@ -1,33 +1,40 @@
 CC = gcc
 CFLAGS = -Wall
 
-#all: data-link-protocol
+APPLICATION_DIR = application/
+PROTOCOL_DIR = protocol/
+CABLE_DIR = cable/
 
-#data-link-protocol: app.o linklayer.o helpers.o
-#	gcc -o data-link-protocol app.o linklayer.o helpers.o
+TX_SERIAL_PORT = /dev/ttyS10
+RX_SERIAL_PORT = /dev/ttyS11
 
-#app.o: app.c linklayer.h
-#	gcc -o app.o app.c -c -Wall
+TX_FILE = penguin.gif
+RX_FILE = penguin-received.gif
 
-#linklayer.o: linklayer.c linklayer.h helpers.h
-#	gcc -o linklayer.o linklayer.c -c -Wall
+all: application_main cable_app
 
-#helpers.o: helpers.c helpers.h
+application_main: $(APPLICATION_DIR)/main.c $(PROTOCOL_DIR)/*.c
+	$(CC) $(CFLAGS) -o $@ $^ -I$(PROTOCOL_DIR)
 
-#clean:
-#	rm -rf *.o *~ data-link-protocol
+cable_app: $(CABLE_DIR)/cable.c
+	$(CC) $(CFLAGS) -o $@ $^
 
+.PHONY: run_tx
+run_tx: application_main
+	./application_main $(TX_SERIAL_PORT) tx $(TX_FILE)
 
-all: data-link-protocol
+.PHONY: run_rx
+run_rx: application_main
+	./application_main $(RX_SERIAL_PORT) rx $(RX_FILE)
 
-data-link-protocol: app.o linklayer.o
-	gcc -o data-link-protocol app.o linklayer.o 
+.PHONY: run_cable
+run_cable: cable_app
+	./cable_app
 
-app.o: app.c linklayer.h
-	gcc -o app.o app.c -c -Wall
+.PHONY: check_files
+check_files:
+	diff -s $(TX_FILE) $(RX_FILE) || exit 0
 
-linklayer.o: linklayer.c linklayer.h
-	gcc -o linklayer.o linklayer.c -c -Wall
-
+.PHONY: clean
 clean:
-	rm -rf *.o *~ data-link-protocol
+	rm application_main cable_app || exit 0

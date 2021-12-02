@@ -33,6 +33,8 @@
 
 #define ESCAPE_CHAR 0x7D
 
+struct termios oldtio;
+struct termios newtio;
 
 volatile int STOP = FALSE;
 char read_data[BUF_SIZE];
@@ -43,8 +45,8 @@ int read_count=0;
 
 int alarmEnabled = 1;
 int alarmCount = 0;
-int sendNumber = 0;
-int readNumber = 0;
+int sendNumber = 0; // Ns
+int readNumber = 0; // Rs
 
 enum State { START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, DONE };
 
@@ -63,6 +65,8 @@ int generateITrama(char* tramaI, char* buffer, int bufSize);
 // Generate RR and REJ based on Ns
 int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber);
 
+int sendTrama(char* trama, int length);
+
 int sendUATrama(int fd);
 
 int sendSETTrama(int fd);
@@ -73,20 +77,10 @@ void sendREJtrama(char controlo,int fd);
 
 void sendRRtrama(char controlo,int fd);
 
-int sendDISCTrama(int fd);
-
-int getDISCTrama(int fd);
-
 // Generate BCC2 frame
 char generateBCC2Frame(char* buffer, int bufSize);
 
-void stateMachineSETMessage(enum State* state, char flag);
-
-void stateMachineUAMessage(enum State* state, char flag);
-
-void stateMachineDISCMessageTransmitter(enum State* state, char flag);
-
-void stateMachineDISCMessageReceiver(enum State* state, char flag);
+void stateMachine(enum State* state, char flag, char A, char C, char BCC);
 
 void printArrayHex(char* array, int length);
 
@@ -94,21 +88,7 @@ void printArrayHex(char* array, int length);
 /*                                  IMPLEMENTATION                                 */
 /***********************************************************************************/
 
-int llopen(linkLayer connectionParameters) {
-    sprintf(connection.serialPort, "%s", connectionParameters.serialPort);
-    connection.role = connectionParameters.role;
-    connection.numTries = connectionParameters.numTries;
-    connection.timeOut = connectionParameters.timeOut;
-
-    fd = open(connection.serialPort, O_RDWR | O_NOCTTY );
-    if (fd < 0) {
-        perror("Error: cannot open the serial port.");
-        return ERROR;
-    }
-
-    struct termios oldtio;
-    struct termios newtio;
-
+int configTermios() {
     if (tcgetattr(fd, &oldtio) == -1) {
         perror("tcgetattr");
         return ERROR;
@@ -130,6 +110,27 @@ int llopen(linkLayer connectionParameters) {
         perror("tcsetattr");
         return ERROR;
     }
+
+    return TRUE;
+}
+
+int llopen(linkLayer connectionParameters) {
+    sprintf(connection.serialPort, "%s", connectionParameters.serialPort);
+    connection.role = connectionParameters.role;
+    connection.numTries = connectionParameters.numTries;
+    connection.timeOut = connectionParameters.timeOut;
+
+    fd = open(connection.serialPort, O_RDWR | O_NOCTTY );
+    if (fd < 0) {
+        perror("Error: cannot open the serial port.");
+        return ERROR;
+    }
+
+    if(configTermios() == ERROR) {
+        printf("Cannot set termios structure.\n");
+        return ERROR;
+    }
+
     printf(connection.role == TRANSMITTER ? "Openning as transmitter\n" : "Openning as receiver\n");
     printf("New termios structure set\n");
 
@@ -147,7 +148,9 @@ int llopen(linkLayer connectionParameters) {
     if(connectionParameters.role == RECEIVER) {
         getSETTrama(fd);
         Trama_lida=C_SET;
-        sendUATrama(fd);
+        char ua[5];
+        generateSUTrama(ua, A_RX, C_UA);
+        if(sendTrama(ua, 5) == ERROR) printf("Cannot write UA\n");
         return TRUE;
     }
 
@@ -425,7 +428,6 @@ int llwrite(char* buf, int bufSize) {
 int llclose(int showStatistics) {
     int role = connection.role;
     char disc[5], ua[5], buffer[2008];
-    int state = 0, done = 0, tries = 0;
 
     if(role == NOT_DEFINED) {
         perror("Error: role was not defined.\n");
@@ -436,68 +438,71 @@ int llclose(int showStatistics) {
     generateSUTrama(ua, A_TX, C_UA);
 
     if (role == TRANSMITTER) {
-        while(!done) {
-            switch(state) {
-                case 0: 
-                    if(write(fd, disc, 5) < 0) {
-                        printf("ERROR: Cannot write DISC\n");
-                        return ERROR;
-                    }
-                    break;
-                case 1:
-                    if(read(fd, buffer, 1) < 0) {
-                        if(tries < connection.numTries) {
-                            tries++;
-                            state = 0;
-                        } else {
-                            printf("Number of tries exceeded the limit...\n");
-                            return -1;
-                        }
-                    } else {
-                        if (memcmp(buffer, disc, 5) == 0) {
-                            state = 2;
-                        } else state = 0;
-                    }
-                    break;
-                case 2:
-                    if(write(fd, ua, 5) < 0) {
-                        printf("ERROR: Cannot write UA\n");
-                        return ERROR;
-                    } else done = 1;
-                default: break;
+        printf("Closing as transmitter...\n");
+        if(sendTrama(disc, 5) == ERROR)  {
+            printf("Cannot send DISC\n");
+            return ERROR;
+        } else {
+            printf("Transmitter sent DISC\n");
+            enum State state = START;
+            char flag;
+            int currentState = 0;
+            while(state != DONE) {
+                read(fd, &flag, 1);
+                stateMachine(&state, flag, A_TX, C_DISC, BCC_DISC);
+                currentState++;
+            }
+            if(state == DONE) {
+                printf("Transmitter received DISC\n");
+                if(sendTrama(ua, 5) == ERROR) {
+                    printf("Cannot send UA\n");
+                    return ERROR;
+                } else {
+                    printf("Transmitter sent UA\n");
+                    printf("Closing the connection...\n");
+                    return TRUE;
+                }
             }
         }
+        
         return TRUE;
     }
 
     if (role == RECEIVER) {
-        while(!done) {
-            switch(state) {
-                case 0: 
-                    if(write(fd, disc, 5) < 0) {
-                        printf("ERROR: Cannot write DISC\n");
-                        return ERROR;
-                    }
-                    break;
-                case 1:
-                    if(read(fd, buffer, 1) < 0) {
-                        if(tries < connection.numTries) {
-                            tries++;
-                            state = 0;
-                        } else {
-                            printf("Number of tries exceeded the limit...\n");
-                            return -1;
-                        }
-                    } else {
-                        if (memcmp(buffer, ua, 5) == 0) {
-                            done = 1;
-                        } else state = 0;
-                    }
-                    break;
-                default: break;
+        printf("Closing as receiver...\n");
+        enum State state = START;
+        char flag;
+        int currentState = 0;
+        while(state != DONE) {
+            read(fd, &flag, 1);
+            stateMachine(&state, flag, A_TX, C_DISC, BCC_DISC);
+            currentState++;
+        }
+        if(state == DONE) {
+            printf("Receiver received DISC\n");
+            if(sendTrama(disc, 5) == ERROR) {
+                printf("Cannot write DISC\n");
+                return ERROR;
+            } else {
+                printf("Receiver sent DISC\n");
+                /* enum State state1 = START;
+                int currentState1 = 0;
+                char flag1;
+                while(state1 != DONE) {
+                    printf("currentState: %d\n", currentState1);
+                    read(fd, &flag1, 1);
+                    stateMachine(&state1, flag1, A_TX, C_UA, BCC_UA);
+                    currentState1++;
+                }
+                if(state1 == DONE) {
+                    printf("Receiver received UA\n");
+                    printf("Closing the connection...\n");
+                    return TRUE;
+                } */
+                printf("Closing the connection...\n");
+                return TRUE;
             }
         }
-
         return TRUE;
     }
     return TRUE;
@@ -591,14 +596,9 @@ int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber) {
     return 1;
 }
 
-int sendUATrama(int fd) {
-    printf("UA was sent\n");
-    char ua[5];
-    generateSUTrama(ua, A_RX, C_UA);
-    int length = write(fd, ua, 5);
-    if(length < 0) return -1;
-    printf("%d bytes written\n", length);
-    return 1;
+int sendTrama(char* trama, int length) {
+    if(write(fd, trama, length) < 0) return ERROR;
+    else return TRUE;
 }
 
 int sendSETTrama(int fd) {
@@ -617,7 +617,7 @@ int sendSETTrama(int fd) {
 
         while(state != DONE && alarmEnabled == 0) {
             read(fd, &flag, 1);
-            stateMachineSETMessage(&state, flag);
+            stateMachine(&state, flag, A_RX, C_UA, BCC_UA);
         }
 
         if(state == DONE) {
@@ -637,38 +637,9 @@ void getSETTrama(int fd) {
     int currentState = 0;
     while(state != DONE) {
         read(fd, &flag, 1);
-        stateMachineUAMessage(&state, flag);
+        stateMachine(&state, flag, A_TX, C_SET, BCC_SET);
         currentState++;
     }
-}
-
-int sendDISCTrama(int fd) {
-    printf("DISC was sent\n");
-    char disc[5];
-    generateSUTrama(disc, A_RX, C_DISC);
-    int length = write(fd, disc, 5);
-
-    if(length < 0) return -1;
-    printf("%d bytes written\n", length);
-    return 1;
-}
-
-int getDISCTrama(int fd) {
-
-    enum State state = START;
-    char flag;
-    int currentState = 0;
-    while(state != DONE) {
-        read(fd, &flag, 1);
-        stateMachineDISCMessageReceiver(&state, flag);
-        currentState++;
-    }
-    
-    if(state == DONE) {
-        printf("Transmitter received DISC\n");
-        return 1;
-    }
-    return -1;
 }
 
 void sendRRtrama(char controlo,int fd){
@@ -694,7 +665,7 @@ char generateBCC2Frame(char* buffer, int bufSize) {
     return bcc2;
 }
 
-void stateMachineSETMessage(enum State* state, char flag) {
+void stateMachine(enum State* state, char flag, char A, char C, char BCC) {
     switch(*state) {
         case START: 
             if(flag == F) *state = FLAG_RCV;
@@ -702,124 +673,19 @@ void stateMachineSETMessage(enum State* state, char flag) {
         
         case FLAG_RCV: 
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == A_RX) *state = A_RCV;
+            else if(flag == A) *state = A_RCV;
             else *state = START;
             break;
         
         case A_RCV:
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == C_UA) *state = C_RCV;
+            else if(flag == C) *state = C_RCV;
             else *state = START;
             break;
         
         case C_RCV:
             if(flag == F) *state = FLAG_RCV;
-            else if(flag == (BCC_UA)) *state = BCC_OK;
-            else *state = START;            
-            break;
-        
-        case BCC_OK:
-            if(flag == F) *state = DONE;
-            break;
-
-        case DONE:
-            break;
-    }
-}
-
-void stateMachineUAMessage(enum State* state, char flag) {
-    switch(*state) {
-        case START: 
-            if(flag == F) *state = FLAG_RCV;
-            break;
-        
-        case FLAG_RCV: 
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == A_TX) *state = A_RCV;
-            else *state = START;
-            break;
-        
-        case A_RCV:
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == C_SET) *state = C_RCV;
-            else *state = START;
-            break;
-        
-        case C_RCV:
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == (BCC_SET)) *state = BCC_OK;
-            else *state = START;            
-            break;
-        
-        case BCC_OK:
-            if(flag == F) *state = DONE;
-            break;
-
-        case DONE:
-            break;
-    }
-}
-
-void stateMachineDISCMessageTransmitter(enum State* state, char flag) {
-    switch(*state) {
-        case START: 
-            if(flag == F) *state = FLAG_RCV;
-            printf("START %x\n", flag);
-            break;
-        
-        case FLAG_RCV: 
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == A_TX) *state = A_RCV;
-            else *state = START;
-            printf("FLAG_RCV %x\n", flag);
-            break;
-        
-        case A_RCV:
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == C_DISC) *state = C_RCV;
-            else *state = START;
-            printf("A_RCV %x\n", flag);
-            break;
-        
-        case C_RCV:
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == (BCC_DISC)) *state = BCC_OK;
-            else *state = START;    
-            printf("C_RCV %x\n", flag);        
-            break;
-        
-        case BCC_OK:
-            if(flag == F) *state = DONE;
-            printf("BCC_OK %x\n", flag);
-            break;
-
-        case DONE:
-            printf("DONE %x\n", flag);
-            break;
-    }
-}
-
-void stateMachineDISCMessageReceiver(enum State* state, char flag) {
-    switch(*state) {
-        case START: 
-            if(flag == F) *state = FLAG_RCV;
-            break;
-        
-        case FLAG_RCV: 
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == A_RX) *state = A_RCV;
-            else *state = START;
-            break;
-        
-        case A_RCV:
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == C_DISC) *state = C_RCV;
-            else *state = START;
-            break;
-        
-        case C_RCV:
-            if(flag == F) *state = FLAG_RCV;
-            else if(flag == (BCC_DISC)) *state = BCC_OK;
+            else if(flag == (BCC)) *state = BCC_OK;
             else *state = START;            
             break;
         
