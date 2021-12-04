@@ -166,8 +166,116 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-    int frame_pos=0,package_pos=0,controlo,stuffing_pos,bytes_read=0,flag_count=0;
-    char buffer[BUF_SIZE];
+/*
+    int state = 0, tries = 0, res = 0, done = 0, buffer[2008];
+    char bcc = 0x00;
+    char disc[5], rr[5], rej[5], rrLost[5];
+
+    generateSUTrama(disc, A_TX, C_DISC);
+
+    while(!done) {
+        switch(state) {
+            case 0:
+                if((res = (read(fd, buffer, 5))) < 0) {
+                    if(tries < connection.numTries) {
+                        tries++;
+                        state = 6;
+                    } else {
+                        printf("Number of tries exceeded the limit\n");
+                        return ERROR;
+                    }
+                } else {
+                    //if(buffer[2] != C_SET && buffer[2] != C_UA && buffer[2] != C_DISC)
+                    state = 1;
+                }
+                break;
+            case 1:
+                if(buffer[3] != (buffer[1]^buffer[2])) {
+                    state = 6;
+                    break;
+                }
+                state = 2;
+                break;
+            case 2:
+                if(memcmp(buffer, disc, 5) == 0) return 2;
+                else state = 3;
+                break;
+            case 3:
+                for(int i = 4; i < res - 1; i++) {
+                    if(buffer[i] == 0x7D && (buffer[i+1] == 0x5E || buffer[i+1] == 0x5D)) {
+                        if(buffer[i+1] == 0x5E) buffer[i] = F;
+                        else if(buffer[i+1] == 0x5D) buffer[i] = 0x7D;
+                        for(int j = i + 1; j < res -1;  j++) buffer[j] = buffer[j+1];
+                        res--;
+                    }
+                }
+                state = 4;
+                break;
+            case 4:
+                bcc = buffer[4];
+                for(int i = 5; i < res - 2; i++) bcc ^=buffer[i];
+                if(bcc != buffer[res-2]) {
+                    state = 6;
+                    break;
+                }
+                state = 5;
+                break;
+            case 5:
+                if(buffer[2] == C_I_S0 && readNumber == 0) {
+                    readNumber = 1;
+                    generateSUTrama(rr, A_TX, C_RR_R1);
+                } else if(buffer[2] == C_I_S1 && readNumber == 1) {
+                    readNumber = 0;
+                    generateSUTrama(rr, A_TX, C_RR_R0);
+                } else {
+                    state = 7;
+                    break;
+                }
+                int i, j;
+                for(i = 0, j = 0; i < res - 2; i++, j++) package[j] = buffer[i];
+                tcflush(fd, TCIOFLUSH);
+                if(write(fd, rr, 5) < 0) {
+                    printf("ERROR: Cannot write RR\n");
+                    return -1;
+                }
+                done = 1;
+                break;
+            case 6:
+                if(res == -1) {
+                    if(readNumber == 0) generateSUTrama(rej, A_TX, C_REJ_R0);
+                    else if(readNumber == 1) generateSUTrama(rej, A_TX, C_REJ_R1); 
+                } else {
+                    if(buffer[2] == C_I_S0 && readNumber == 0) generateSUTrama(rej, A_TX, C_REJ_R0);
+                    else if(buffer[2] == C_I_S1 && readNumber == 1) generateSUTrama(rej, A_TX, C_REJ_R1);
+                }
+
+                tcflush(fd, TCIOFLUSH);
+                if(write(fd, rej, 5) < 0) {
+                    perror("REJ WRITE");
+                    return ERROR;
+                }
+                state = 0;
+                break;
+            case 7:
+                if(buffer[2] == C_I_S0 && readNumber == 1) generateSUTrama(rrLost, A_TX, C_REJ_R1);
+                else if(buffer[2] == C_I_S1 && readNumber == 0) generateSUTrama(rrLost, A_TX, C_REJ_R0);
+
+                tcflush(fd, TCIOFLUSH);
+                if(write(fd, rrLost, 5) < 0) {
+                    perror("llwrite() LOST");
+                    return ERROR;
+                }
+                memset(buffer, 0, 2008);
+                return -2;
+            
+            default: break;
+        }
+    }
+    return (res-6);*/
+
+
+    int frame_pos=0,package_pos=0,controlo,stuffing_pos,bytes_read=0,flag_count=0,buffer2_pos=0;
+    char buffer[BUF_SIZE],buffer2[BUF_SIZE];
     char Bcc2=0x00;
 
     while(1) {
@@ -214,63 +322,67 @@ int llread(char *package){
     
     while(buffer[frame_pos] != F){    //neste ciclo preenche-se o pacote com a data pretendida
 
+        if((frame_pos == bytes_read-3) && (buffer[frame_pos] == 0x7d)  && ( buffer[frame_pos+1]==0x5e || buffer[frame_pos+1]==0x5d ) ){ //faz o byte stuffing do controlo
+            
+            frame_pos++;
+
+            if(buffer[frame_pos]==0x5e){  // se o byte for 0x7e
+                buffer2[buffer2_pos] = F;
+                buffer2_pos++;
+                frame_pos++;
+            }
+
+             
+            else if(buffer[frame_pos]==0x5d){  // se o byte for 0x7d
+                buffer2[buffer2_pos] = 0x7e;
+                buffer2_pos++;
+                frame_pos++;
+            }
+
+        }
+
         if(frame_pos ==  bytes_read-2){   //se a data esta corrompida pede para o pacote ser enviado de novo;
             
             if(Bcc2 == buffer[frame_pos]) frame_pos++;
 
             else{
-                memset(package,0,package_pos+1);
+                memset(buffer2,0,buffer2_pos+1);
                 sendREJtrama(buffer[controlo],fd);
                 bytes_read=0;
                 Bcc2=0x00;
                 while(bytes_read<=0) bytes_read=read(fd,buffer,MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta
-                package_pos=0;
+                buffer2_pos=0;
                 frame_pos=controlo+2;
             }
         }
 
         else{
-            package[package_pos]=buffer[frame_pos];
-            Bcc2^=package[package_pos];
+            buffer2[buffer2_pos]=buffer[frame_pos];
+            Bcc2^=buffer2[package_pos];
             frame_pos++;
-            package_pos++;
+            buffer2_pos++;
         }
 
     }
 
-    for(int i=0;i<package_pos;i++){   // repara todos os possiveis bytes alterados
-        if(package[i]==0x7d){
+    for(int i=0;i<buffer2_pos;i++){   // repara todos os possiveis bytes alterados
+        if(buffer2[i]==0x7d){
             i++;
 
-            if(package[i]==0x5e){  // se o byte for 0x7e
-                package[i-1]=F;
-                stuffing_pos=i;
-                i++;
-
-                while(i<package_pos){ // se o byte for 0x7d
-                 
-                    package[i-1]=package[i];
-                    i++;
-
-                }
-                package_pos--;
-                i=stuffing_pos;
+            if(buffer2[i]==0x5e){  // se o byte for 0x7e
+                package[package_pos]=F;
+                package_pos++;
             }
 
-            else if(package[i]==0x5d){
-                stuffing_pos=i;
-                i++;
-
-                while(i<package_pos){ // coloca as posiçôes todas um passo para a diretia
-                 
-                    package[i-1]=package[i];
-                    i++;
-
-                }
-
-                package_pos--;
-                i=stuffing_pos;
+            else if(buffer2[i]==0x5d){
+              package[package_pos]=0x7d;;
+                package_pos++;
             }
+        }
+
+        else {
+        package[package_pos]=buffer2[i];
+        package_pos++;
         }
 
     }
