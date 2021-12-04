@@ -266,8 +266,8 @@ int llread(char *package){
     return (res-6);*/
 
 
-    int frame_pos=0,package_pos=0,controlo,stuffing_pos,bytes_read=0,flag_count=0;
-    char buffer[BUF_SIZE];
+    int frame_pos=0,package_pos=0,controlo,stuffing_pos,bytes_read=0,flag_count=0,buffer2_pos=0;
+    char buffer[BUF_SIZE],buffer2[BUF_SIZE];
     char Bcc2=0x00;
 
     while(1) {
@@ -314,63 +314,67 @@ int llread(char *package){
     
     while(buffer[frame_pos] != F){    //neste ciclo preenche-se o pacote com a data pretendida
 
+        if((frame_pos == bytes_read-3) && (buffer[frame_pos] == 0x7d)  && ( buffer[frame_pos+1]==0x5e || buffer[frame_pos+1]==0x5d ) ){ //faz o byte stuffing do controlo
+            
+            frame_pos++;
+
+            if(buffer[frame_pos]==0x5e){  // se o byte for 0x7e
+                buffer2[buffer2_pos] = F;
+                buffer2_pos++;
+                frame_pos++;
+            }
+
+             
+            else if(buffer[frame_pos]==0x5d){  // se o byte for 0x7d
+                buffer2[buffer2_pos] = 0x7e;
+                buffer2_pos++;
+                frame_pos++;
+            }
+
+        }
+
         if(frame_pos ==  bytes_read-2){   //se a data esta corrompida pede para o pacote ser enviado de novo;
             
             if(Bcc2 == buffer[frame_pos]) frame_pos++;
 
             else{
-                memset(package,0,package_pos+1);
+                memset(buffer2,0,buffer2_pos+1);
                 sendREJtrama(buffer[controlo],fd);
                 bytes_read=0;
                 Bcc2=0x00;
                 while(bytes_read<=0) bytes_read=read(fd,buffer,MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta
-                package_pos=0;
+                buffer2_pos=0;
                 frame_pos=controlo+2;
             }
         }
 
         else{
-            package[package_pos]=buffer[frame_pos];
-            Bcc2^=package[package_pos];
+            buffer2[buffer2_pos]=buffer[frame_pos];
+            Bcc2^=buffer2[package_pos];
             frame_pos++;
-            package_pos++;
+            buffer2_pos++;
         }
 
     }
 
-    for(int i=0;i<package_pos;i++){   // repara todos os possiveis bytes alterados
-        if(package[i]==0x7d){
+    for(int i=0;i<buffer2_pos;i++){   // repara todos os possiveis bytes alterados
+        if(buffer2[i]==0x7d){
             i++;
 
-            if(package[i]==0x5e){  // se o byte for 0x7e
-                package[i-1]=F;
-                stuffing_pos=i;
-                i++;
-
-                while(i<package_pos){ // se o byte for 0x7d
-                 
-                    package[i-1]=package[i];
-                    i++;
-
-                }
-                package_pos--;
-                i=stuffing_pos;
+            if(buffer2[i]==0x5e){  // se o byte for 0x7e
+                package[package_pos]=F;
+                package_pos++;
             }
 
-            else if(package[i]==0x5d){
-                stuffing_pos=i;
-                i++;
-
-                while(i<package_pos){ // coloca as posiçôes todas um passo para a diretia
-                 
-                    package[i-1]=package[i];
-                    i++;
-
-                }
-
-                package_pos--;
-                i=stuffing_pos;
+            else if(buffer2[i]==0x5d){
+              package[package_pos]=0x7d;;
+                package_pos++;
             }
+        }
+
+        else {
+        package[package_pos]=buffer2[i];
+        package_pos++;
         }
 
     }
