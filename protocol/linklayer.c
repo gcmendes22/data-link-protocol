@@ -166,7 +166,7 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-    int frame_pos=0,package_pos=0,controlo,stuffing_pos,bytes_read=0,flag_count=0,buffer2_pos=0;
+    int frame_pos=0,package_pos=0,controlo,bytes_read=0,flag_count=0,buffer2_pos=0;
     char buffer[BUF_SIZE],buffer2[BUF_SIZE];
     char Bcc2=0x00;
 
@@ -262,52 +262,35 @@ int llwrite(char* buf, int bufSize) {
 
     printf("%d\n",bufSize);
 
-    int response, tries = 0, state = 0, done = 0;;
+    int response, state = 0, done = 0;;
     int tramaILength = generateITrama(tramaI, buf, bufSize);
 
     generateRRandREJTramas(tramaRR, tramaREJ, sendNumber);
-    
-
-/*     while(!done) {
-        switch(state) {
-            case 0:
-                response = write(fd, tramaI, tramaILength);
-                state = 1;
-                break;
-            case 1:
-                read(fd, buffer, 5);
-                if (memcmp(tramaRR, buffer, 5) == 0) {
-                    sendNumber ^= 1;
-                    done = 1;
-                } else if (memcmp(tramaREJ, buffer, 5) == 0) {
-                    state = 0;
-                } else {
-                }
-                break;
-            default: break;
-        }
-    } */
 
     while(!done) {
         switch(state) {
             case 0:
                 response = write(fd, tramaI, tramaILength);
+                startAlarm();
                 state = 1;
-
+                printf("ALARM COUNT: %d\n", alarmCount);
                 break;
             case 1:
+                
                 if(alarmEnabled) {
                     alarm(connection.timeOut);
                     alarmEnabled = 0;
-                }
-                if(alarmEnabled == 0) {
-                    if(read(fd, buffer, 5) < 0) {
-                        if(alarmCount < connection.numTries) {
-                            state = 0;
+                } 
+                
+                response = read(fd, buffer, 5);
 
-                        } else return ERROR;
-                    } else state = 2;
-                }
+                if(response <= 0) {
+                    if(alarmCount < connection.numTries) {
+                        state = 0;
+                        
+                    } else return ERROR;
+                } else state = 2;
+            
 
                 break;
             case 2:
@@ -316,7 +299,7 @@ int llwrite(char* buf, int bufSize) {
                     done = 1;
                 } else if (memcmp(tramaREJ, buffer, 5) == 0) {
                     state = 0;
-                    alarmCount++;
+                   alarmCount++;
                 } else {
                     state = 0;
                     alarmCount++;
