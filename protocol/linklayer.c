@@ -293,7 +293,7 @@ int llwrite(char* buf, int bufSize) {
             case 0:
                 response = write(fd, tramaI, tramaILength);
                 state = 1;
-                alarmCount++;
+
                 break;
             case 1:
                 if(alarmEnabled) {
@@ -316,9 +316,10 @@ int llwrite(char* buf, int bufSize) {
                     done = 1;
                 } else if (memcmp(tramaREJ, buffer, 5) == 0) {
                     state = 0;
-                    
+                    alarmCount++;
                 } else {
                     state = 0;
+                    alarmCount++;
                 }
                 break;
             default: break;
