@@ -29,8 +29,6 @@
 #define BCC_I_S0 A_TX^C_I_S0 // BCC frame of I trama when SendNumber = 0
 #define BCC_I_S1 A_TX^C_I_S1 // BCC frame of I trama when SendNumber = 1
 
-#define ACK_A 0x02
-
 #define ESCAPE_CHAR 0x7D
 
 struct termios oldtio;
@@ -49,6 +47,12 @@ int sendNumber = 0; // Ns
 int readNumber = 0; // Rs
 
 enum State { START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, DONE };
+
+// Set oldtio and newtio
+int configTermios();
+
+// Init link layer parameters
+void setConnectionParameters(linkLayer connectionParameters);
 
 // Start the alarm
 void startAlarm();
@@ -73,16 +77,16 @@ int sendSETTrama(int fd);
 
 void getSETTrama(int fd);
 
-void sendREJtrama(char controlo,int fd);
+int sendREJtrama(char controlo,int fd);
 
-void sendRRtrama(char controlo,int fd);
+int sendRRtrama(char controlo,int fd);
 
 // Generate BCC2 frame
 char generateBCC2Frame(char* buffer, int bufSize);
 
 void stateMachine(enum State* state, char flag, char A, char C, char BCC);
 
-void printArrayHex(char* array, int length);
+void printArrayHex(char* array, int length, char* label);
 
 /***********************************************************************************/
 /*                                  IMPLEMENTATION                                 */
@@ -114,11 +118,15 @@ int configTermios() {
     return TRUE;
 }
 
-int llopen(linkLayer connectionParameters) {
+void setConnectionParameters(linkLayer connectionParameters) {
     sprintf(connection.serialPort, "%s", connectionParameters.serialPort);
     connection.role = connectionParameters.role;
     connection.numTries = connectionParameters.numTries;
     connection.timeOut = connectionParameters.timeOut;
+}
+
+int llopen(linkLayer connectionParameters) {
+    setConnectionParameters(connectionParameters);
 
     fd = open(connection.serialPort, O_RDWR | O_NOCTTY );
     if (fd < 0) {
@@ -158,114 +166,6 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-/*
-    int state = 0, tries = 0, res = 0, done = 0, buffer[2008];
-    char bcc = 0x00;
-    char disc[5], rr[5], rej[5], rrLost[5];
-
-    generateSUTrama(disc, A_TX, C_DISC);
-
-    while(!done) {
-        switch(state) {
-            case 0:
-                if((res = (read(fd, buffer, 5))) < 0) {
-                    if(tries < connection.numTries) {
-                        tries++;
-                        state = 6;
-                    } else {
-                        printf("Number of tries exceeded the limit\n");
-                        return ERROR;
-                    }
-                } else {
-                    //if(buffer[2] != C_SET && buffer[2] != C_UA && buffer[2] != C_DISC)
-                    state = 1;
-                }
-                break;
-            case 1:
-                if(buffer[3] != (buffer[1]^buffer[2])) {
-                    state = 6;
-                    break;
-                }
-                state = 2;
-                break;
-            case 2:
-                if(memcmp(buffer, disc, 5) == 0) return 2;
-                else state = 3;
-                break;
-            case 3:
-                for(int i = 4; i < res - 1; i++) {
-                    if(buffer[i] == 0x7D && (buffer[i+1] == 0x5E || buffer[i+1] == 0x5D)) {
-                        if(buffer[i+1] == 0x5E) buffer[i] = F;
-                        else if(buffer[i+1] == 0x5D) buffer[i] = 0x7D;
-                        for(int j = i + 1; j < res -1;  j++) buffer[j] = buffer[j+1];
-                        res--;
-                    }
-                }
-                state = 4;
-                break;
-            case 4:
-                bcc = buffer[4];
-                for(int i = 5; i < res - 2; i++) bcc ^=buffer[i];
-                if(bcc != buffer[res-2]) {
-                    state = 6;
-                    break;
-                }
-                state = 5;
-                break;
-            case 5:
-                if(buffer[2] == C_I_S0 && readNumber == 0) {
-                    readNumber = 1;
-                    generateSUTrama(rr, A_TX, C_RR_R1);
-                } else if(buffer[2] == C_I_S1 && readNumber == 1) {
-                    readNumber = 0;
-                    generateSUTrama(rr, A_TX, C_RR_R0);
-                } else {
-                    state = 7;
-                    break;
-                }
-                int i, j;
-                for(i = 0, j = 0; i < res - 2; i++, j++) package[j] = buffer[i];
-                tcflush(fd, TCIOFLUSH);
-                if(write(fd, rr, 5) < 0) {
-                    printf("ERROR: Cannot write RR\n");
-                    return -1;
-                }
-                done = 1;
-                break;
-            case 6:
-                if(res == -1) {
-                    if(readNumber == 0) generateSUTrama(rej, A_TX, C_REJ_R0);
-                    else if(readNumber == 1) generateSUTrama(rej, A_TX, C_REJ_R1); 
-                } else {
-                    if(buffer[2] == C_I_S0 && readNumber == 0) generateSUTrama(rej, A_TX, C_REJ_R0);
-                    else if(buffer[2] == C_I_S1 && readNumber == 1) generateSUTrama(rej, A_TX, C_REJ_R1);
-                }
-
-                tcflush(fd, TCIOFLUSH);
-                if(write(fd, rej, 5) < 0) {
-                    perror("REJ WRITE");
-                    return ERROR;
-                }
-                state = 0;
-                break;
-            case 7:
-                if(buffer[2] == C_I_S0 && readNumber == 1) generateSUTrama(rrLost, A_TX, C_REJ_R1);
-                else if(buffer[2] == C_I_S1 && readNumber == 0) generateSUTrama(rrLost, A_TX, C_REJ_R0);
-
-                tcflush(fd, TCIOFLUSH);
-                if(write(fd, rrLost, 5) < 0) {
-                    perror("llwrite() LOST");
-                    return ERROR;
-                }
-                memset(buffer, 0, 2008);
-                return -2;
-            
-            default: break;
-        }
-    }
-    return (res-6);*/
-
-
     int frame_pos=0,package_pos=0,controlo,stuffing_pos,bytes_read=0,flag_count=0;
     char buffer[BUF_SIZE];
     char Bcc2=0x00;
@@ -388,29 +288,17 @@ int llwrite(char* buf, int bufSize) {
     int tramaILength = generateITrama(tramaI, buf, bufSize);
 
     generateRRandREJTramas(tramaRR, tramaREJ, sendNumber);
-    for(int i=0;i<5;i++) printf("0x%x\n",tramaRR[i]);
+    
 
-    while(!done) {
+/*     while(!done) {
         switch(state) {
             case 0:
                 response = write(fd, tramaI, tramaILength);
-                state = 2;
+                state = 1;
                 break;
-            /*case 1:
-                response = read(fd, buffer, 5);
-                if(response == 0) {
-                    if(tries < connection.numTries) {
-                        tries++;
-                        state = 0;
-                    } else {
-                        return ERROR;
-                    }
-                } else state = 2;
-                break;*/
-            case 2:
+            case 1:
                 read(fd, buffer, 5);
                 if (memcmp(tramaRR, buffer, 5) == 0) {
-                    printf("2\n");
                     sendNumber ^= 1;
                     done = 1;
                 } else if (memcmp(tramaREJ, buffer, 5) == 0) {
@@ -420,14 +308,54 @@ int llwrite(char* buf, int bufSize) {
                 break;
             default: break;
         }
+    } */
+
+    while(!done) {
+        switch(state) {
+            case 0:
+                response = write(fd, tramaI, tramaILength);
+                state = 1;
+                alarmCount++;
+                break;
+            case 1:
+                if(alarmEnabled) {
+                    alarm(connection.timeOut);
+                    alarmEnabled = 0;
+                }
+                if(alarmEnabled == 0) {
+                    if(read(fd, buffer, 5) < 0) {
+                        if(alarmCount < connection.numTries) {
+                            state = 0;
+
+                        } else return ERROR;
+                    } else state = 2;
+                }
+
+                break;
+            case 2:
+                printArrayHex(buffer, 5, "OBTAINED");
+                printArrayHex(tramaRR, 5, "RR");
+                printArrayHex(tramaREJ, 5, "REJ");
+                printf("%d\n", memcmp(tramaRR, buffer, 5));
+                if (memcmp(tramaRR, buffer, 5) == 0) {
+                    sendNumber ^= 1;
+                    done = 1;
+                } else if (memcmp(tramaREJ, buffer, 5) == 0) {
+                    state = 0;
+                    
+                } else {
+                    
+                }
+                break;
+            default: break;
+        }
     }
-    
     return bufSize;
 }
 
 int llclose(int showStatistics) {
     int role = connection.role;
-    char disc[5], ua[5], buffer[2008];
+    char disc[5], ua[5];
 
     if(role == NOT_DEFINED) {
         perror("Error: role was not defined.\n");
@@ -642,21 +570,23 @@ void getSETTrama(int fd) {
     }
 }
 
-void sendRRtrama(char controlo,int fd){
+int sendRRtrama(char controlo,int fd){
 
     controlo=!(controlo^0x00);
     char C= C_RR_R0 + (controlo << 5);
-    char buffer[5] = { F, ACK_A , C , ACK_A^C , F };
+    char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_RR = write(fd, buffer, 5);
-
+    if(bytes_RR < 0) return ERROR;
+    return bytes_RR;
 }
 
-void sendREJtrama(char controlo,int fd){
+int sendREJtrama(char controlo,int fd){
 
     char C = C_REJ_R0 + (controlo << 5);
-    char buffer[5] = { F, ACK_A , C , ACK_A^C , F };
+    char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_REJ = write(fd, buffer, 5);
-    
+    if(bytes_REJ < 0) return ERROR;
+    return bytes_REJ;
 }
 
 char generateBCC2Frame(char* buffer, int bufSize) {
@@ -698,8 +628,9 @@ void stateMachine(enum State* state, char flag, char A, char C, char BCC) {
     }
 }
 
-void printArrayHex(char* array, int length) {
+void printArrayHex(char* array, int length, char* label) {
     putchar('\n');
+    printf("%s: ", label);
     for(int i = 0; i < length; i++)
         printf("%.2x ", array[i]);
     putchar('\n');
