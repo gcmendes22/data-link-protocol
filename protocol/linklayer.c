@@ -319,47 +319,79 @@ int llwrite(char* buf, int bufSize) {
 int llclose(int showStatistics) {
     int role = connection.role;
     char disc[5], ua[5];
-
+    
     if(role == NOT_DEFINED) {
         perror("Error: role was not defined.\n");
         return ERROR;
     }
 
-    generateSUTrama(disc, A_TX, C_DISC);
-    generateSUTrama(ua, A_TX, C_UA);
+    
+    
 
     if (role == TRANSMITTER) {
+        char discRX[5];
+        
+        generateSUTrama(disc, A_TX, C_DISC);
+        generateSUTrama(ua, A_TX, C_UA);
+        generateSUTrama(discRX,A_RX,C_DISC);
+
+        char buffer[5];
+
+
         printf("Closing as transmitter...\n");
-        if(sendTrama(disc, 5) == ERROR)  {
-            printf("Cannot send DISC\n");
-            return ERROR;
-        } else {
-            printf("Transmitter sent DISC\n");
-            enum State state = START;
-            char flag;
-            int currentState = 0;
-            while(state != DONE) {
-                read(fd, &flag, 1);
-                stateMachine(&state, flag, A_TX, C_DISC, BCC_DISC);
-                currentState++;
-            }
-            if(state == DONE) {
-                printf("Transmitter received DISC\n");
-                if(sendTrama(ua, 5) == ERROR) {
-                    printf("Cannot send UA\n");
+        alarmCount=0;
+        startAlarm();
+
+        while(1){
+            
+            if(alarmEnabled){
+                if(sendTrama(disc, 5) == ERROR)  {
+                    printf("Cannot send DISC\n");
                     return ERROR;
-                } else {
-                    printf("Transmitter sent UA\n");
-                    printf("Closing the connection...\n");
-                    return TRUE;
+                } 
+                else {
+                    printf("Transmitter sent DISC\n");
+                    alarm(connection.timeOut);
+                    alarmEnabled=0;
+                    alarmCount++;
                 }
             }
+
+            else{
+                read(fd, buffer, 5);
+            }
+
+            if(memcmp(buffer,discRX,5)==0) break;
+
+            else if(alarmCount == connection.numTries){
+                close(fd);
+                return ERROR;
+            }
+
+        }
+
+        printf("Transmitter received DISC\n");
+
+        if(sendTrama(ua, 5) == ERROR) {
+            printf("Cannot send UA\n");
+            return ERROR;
+
+        } 
+        
+        else{
+
+            printf("Transmitter sent UA\n");
+            close(fd);
+            printf("Closing the connection...\n");
+            return TRUE;
         }
         
         return TRUE;
     }
 
     if (role == RECEIVER) {
+        generateSUTrama(disc, A_RX, C_DISC);
+        
         printf("Closing as receiver...\n");
         enum State state = START;
         char flag;
@@ -391,19 +423,14 @@ int llclose(int showStatistics) {
                     return TRUE;
                 } */
                 printf("Closing the connection...\n");
-                if(showStatistics == TRUE) {
-                    printf("==========================\nStatistics:\n");
-                    printf("Number of positives ACK: %d\n", numberOfRRs);
-                    printf("Number of negatives ACK: %d\n", numberOfREJs);
-                }
                 return TRUE;
             }
         }
         return TRUE;
     }
-    
     return TRUE;
 }
+
 
 void startAlarm() {
     (void) signal(SIGALRM, alarmHandler);
