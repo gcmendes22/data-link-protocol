@@ -50,6 +50,9 @@ enum State { START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, DONE };
 
 int numberOfRRs = 0;
 int numberOfREJs = 0;
+int numberOfTimeOuts = 0;
+int numberOfIframesSent = 0;
+int numberOfIframesReceived = 0;
 
 // Set oldtio and newtio
 int configTermios();
@@ -72,24 +75,35 @@ int generateITrama(char* tramaI, char* buffer, int bufSize);
 // Generate RR and REJ based on Ns
 int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber);
 
+// Send generic trama
 int sendTrama(char* trama, int length);
 
+// Send UA trama
 int sendUATrama(int fd);
 
+// Send SET trama
 int sendSETTrama(int fd);
 
+// Get SET trama
 void getSETTrama(int fd);
 
+// Send a REJ trama
 int sendREJtrama(char controlo,int fd);
 
+// Send a RR trama
 int sendRRtrama(char controlo,int fd);
 
 // Generate BCC2 frame
 char generateBCC2Frame(char* buffer, int bufSize);
 
+// State machine (SET, UA, DISC)
 void stateMachine(enum State* state, char flag, char A, char C, char BCC);
 
+// Print an array in hexadecimal (debugging use only)
 void printArrayHex(char* array, int length, char* label);
+
+// Print protocol statistics
+void printStatistics();
 
 /***********************************************************************************/
 /*                                  IMPLEMENTATION                                 */
@@ -169,102 +183,100 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-    int frame_pos=0,package_pos=0,controlo,bytes_read=0,flag_count=0,buffer2_pos=0;
-    char buffer[BUF_SIZE],buffer2[BUF_SIZE];
-    char Bcc2=0x00;
+    int frame_pos = 0, package_pos = 0, controlo, bytes_read = 0, flag_count = 0, buffer2_pos = 0;
+    char buffer[BUF_SIZE], buffer2[BUF_SIZE];
+    char Bcc2 = 0x00;
 
     while(1) {
-        int bytes_read= read(fd,buffer,BUF_SIZE);
+        int bytes_read = read(fd, buffer, BUF_SIZE);
+        if(bytes_read > 0) 
+                numberOfIframesReceived++;
 
-        for (int i=0 ; i<bytes_read; i++){
-            if(buffer[i]==F) flag_count++;
-        }
+        for (int i = 0 ; i < bytes_read; i++)
+            if (buffer[i] == F) flag_count++;
 
-        if(flag_count==2) break;
-        flag_count=0;
+        if (flag_count == 2) break;
+        flag_count = 0;
     }
 
-    while(buffer[frame_pos] != F) frame_pos++;
+    while (buffer[frame_pos] != F) frame_pos++;
 
-    while(buffer[frame_pos] == F) frame_pos++;  //avança até terminarem as flags no header(até o adress)
+    while (buffer[frame_pos] == F) frame_pos++;  //avança até terminarem as flags no header(até o adress)
     
-    if(buffer[frame_pos] != 0x05) return -1; //verifica se o adress é o pretendido
+    if (buffer[frame_pos] != 0x05) return -1; //verifica se o adress é o pretendido
 
     frame_pos++;            // avança para o controlo do header
-    controlo=frame_pos;
+    controlo = frame_pos;
 
-    if(buffer[controlo]==Trama_lida){      //verifica se a trama é repetida
-
-        sendRRtrama(buffer[controlo],fd);   //se for envia ACK sem alterar o pacote
+    if(buffer[controlo] == Trama_lida) {      //verifica se a trama é repetida
+        sendRRtrama(buffer[controlo], fd);   //se for envia ACK sem alterar o pacote
         return 0;
-        
     }
 
     Trama_lida = buffer[controlo];   //grava o numero de sequência;
     frame_pos++;      //avança para a data do pacote
 
-    if(buffer[frame_pos] != (buffer[controlo]^buffer[controlo-1])) return -1;
+    if (buffer[frame_pos] != (buffer[controlo] ^ buffer[controlo - 1])) return -1;
 
     frame_pos++;
 
-    while(buffer[frame_pos] != F){    //neste ciclo preenche-se o pacote com a data pretendida
-        if((frame_pos == bytes_read-3) && (buffer[frame_pos] == 0x7d)  && ( buffer[frame_pos+1]==0x5e || buffer[frame_pos+1]==0x5d ) ){ //faz o byte stuffing do controlo          
+    while (buffer[frame_pos] != F) {    //neste ciclo preenche-se o pacote com a data pretendida
+        if ((frame_pos == bytes_read-3) && (buffer[frame_pos] == 0x7d) && (buffer[frame_pos+1] == 0x5e || buffer[frame_pos + 1] == 0x5d)) { //faz o byte stuffing do controlo          
             frame_pos++;
-            if(buffer[frame_pos]==0x5e){  // se o byte for 0x7e
+            if (buffer[frame_pos] == 0x5e) {  // se o byte for 0x7e
                 buffer2[buffer2_pos] = F;
                 buffer2_pos++;
                 frame_pos++;
-            } else if(buffer[frame_pos]==0x5d){  // se o byte for 0x7d
+            } else if (buffer[frame_pos]==0x5d) {  // se o byte for 0x7d
                 buffer2[buffer2_pos] = 0x7e;
                 buffer2_pos++;
                 frame_pos++;
             }
         }
 
-        if(frame_pos ==  bytes_read-2){   //se a data esta corrompida pede para o pacote ser enviado de novo;    
-            if(Bcc2 == buffer[frame_pos]) frame_pos++;
-            else{
-                memset(buffer2,0,buffer2_pos+1);
-                sendREJtrama(buffer[controlo],fd);
-                bytes_read=0;
-                Bcc2=0x00;
-                while(bytes_read<=0) bytes_read=read(fd,buffer,MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta
-                buffer2_pos=0;
-                frame_pos=controlo+2;
+        if (frame_pos ==  bytes_read-2) {   //se a data esta corrompida pede para o pacote ser enviado de novo;    
+            if (Bcc2 == buffer[frame_pos]) frame_pos++;
+            else {
+                memset(buffer2, 0, buffer2_pos + 1);
+                sendREJtrama(buffer[controlo], fd);
+                bytes_read = 0;
+                Bcc2 = 0x00;
+                while (bytes_read <= 0) bytes_read = read(fd, buffer, MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta
+                buffer2_pos = 0;
+                frame_pos = controlo + 2;
             }
-        } else{
-            buffer2[buffer2_pos]=buffer[frame_pos];
-            Bcc2^=buffer2[package_pos];
+        } else {
+            buffer2[buffer2_pos] = buffer[frame_pos];
+            Bcc2 ^= buffer2[package_pos];
             frame_pos++;
             buffer2_pos++;
         }
     }
 
-    for(int i=0;i<buffer2_pos;i++){   // repara todos os possiveis bytes alterados
-        if(buffer2[i]==0x7d){
+    for (int i = 0; i < buffer2_pos; i++) {   // repara todos os possiveis bytes alterados
+        if (buffer2[i] == 0x7d) {
             i++;
-            if(buffer2[i]==0x5e){  // se o byte for 0x7e
-                package[package_pos]=F;
+            if (buffer2[i] == 0x5e) {  // se o byte for 0x7e
+                package[package_pos] = F;
                 package_pos++;
-            } else if(buffer2[i]==0x5d){
-              package[package_pos]=0x7d;;
+            } else if (buffer2[i] == 0x5d) {
+                package[package_pos] = 0x7d;
                 package_pos++;
             }
         } else {
-            package[package_pos]=buffer2[i];
+            package[package_pos] = buffer2[i];
             package_pos++;
         }
     }
 
-    sendRRtrama(buffer[controlo],fd); //manda o ACK
-    return package_pos; 
+    sendRRtrama(buffer[controlo], fd); //manda o ACK
+    return package_pos;
 }
 
 int llwrite(char* buf, int bufSize) {
     char tramaI[2008], tramaRR[5], tramaREJ[5], buffer[2008];
 
-    printf("%d\n",bufSize);
-    alarmCount=0;
+    alarmCount = 0;
 
     int response, state = 0, done = 0;;
     int tramaILength = generateITrama(tramaI, buf, bufSize);
@@ -275,9 +287,9 @@ int llwrite(char* buf, int bufSize) {
     while(!done) {
         switch(state) {
             case 0:
-                response = write(fd, tramaI, tramaILength);
+                if ((response = write(fd, tramaI, tramaILength)) > 0) 
+                    numberOfIframesSent++;
                 state = 1;
-                printf("ALARM COUNT: %d\n", alarmCount);
                 break;
             case 1:
                 
@@ -292,23 +304,22 @@ int llwrite(char* buf, int bufSize) {
                 if(response <= 0) {
                     if(alarmCount < connection.numTries) {
                         state = 0;
-                        
+                        numberOfTimeOuts++;
                     } else return ERROR;
                 } else state = 2;
-            
 
                 break;
             case 2:
                 if (memcmp(tramaRR, buffer, 5) == 0) {
                     sendNumber ^= 1;
                     done = 1;
+                    numberOfRRs++;
                 } else if (memcmp(tramaREJ, buffer, 5) == 0) {
                     state = 0;
-                   alarmCount++;
-                } else {
-                    state = 0;
-
-                }
+                    alarmCount++;
+                    numberOfTimeOuts++;
+                    numberOfREJs++;
+                } else state = 0;
                 break;
             default: break;
         }
@@ -325,9 +336,6 @@ int llclose(int showStatistics) {
         return ERROR;
     }
 
-    
-    
-
     if (role == TRANSMITTER) {
         char discRX[5];
         
@@ -336,38 +344,29 @@ int llclose(int showStatistics) {
         generateSUTrama(discRX,A_RX,C_DISC);
 
         char buffer[5];
-
-
-        printf("Closing as transmitter...\n");
-        alarmCount=0;
+        alarmCount = 0;
         startAlarm();
 
-        while(1){
-            
+        while(1) {
             if(alarmEnabled){
                 if(sendTrama(disc, 5) == ERROR)  {
-                    printf("Cannot send DISC\n");
+                    printf("Error: Cannot send DISC\n");
                     return ERROR;
-                } 
-                else {
-                    printf("Transmitter sent DISC\n");
-                    alarm(connection.timeOut);
-                    alarmEnabled=0;
-                    alarmCount++;
                 }
-            }
+                printf("Transmitter sent DISC\n");
+                alarm(connection.timeOut);
+                alarmEnabled = 0;
+                alarmCount++;
+                numberOfTimeOuts++;
+            } else read(fd, buffer, 5);
 
-            else{
-                read(fd, buffer, 5);
-            }
-
-            if(memcmp(buffer,discRX,5)==0) break;
-
-            else if(alarmCount == connection.numTries){
+            if(memcmp(buffer,discRX,5) == 0) break;
+            
+            if(alarmCount == connection.numTries) {
                 close(fd);
+                printf("Error: Cannot close the connection with success.\n");
                 return ERROR;
             }
-
         }
 
         printf("Transmitter received DISC\n");
@@ -375,14 +374,11 @@ int llclose(int showStatistics) {
         if(sendTrama(ua, 5) == ERROR) {
             printf("Cannot send UA\n");
             return ERROR;
-
-        } 
-        
-        else{
-
+        } else{
             printf("Transmitter sent UA\n");
             close(fd);
             printf("Closing the connection...\n");
+            printStatistics();
             return TRUE;
         }
         
@@ -391,8 +387,7 @@ int llclose(int showStatistics) {
 
     if (role == RECEIVER) {
         generateSUTrama(disc, A_RX, C_DISC);
-        
-        printf("Closing as receiver...\n");
+
         enum State state = START;
         char flag;
         int currentState = 0;
@@ -408,21 +403,8 @@ int llclose(int showStatistics) {
                 return ERROR;
             } else {
                 printf("Receiver sent DISC\n");
-                /* enum State state1 = START;
-                int currentState1 = 0;
-                char flag1;
-                while(state1 != DONE) {
-                    printf("currentState: %d\n", currentState1);
-                    read(fd, &flag1, 1);
-                    stateMachine(&state1, flag1, A_TX, C_UA, BCC_UA);
-                    currentState1++;
-                }
-                if(state1 == DONE) {
-                    printf("Receiver received UA\n");
-                    printf("Closing the connection...\n");
-                    return TRUE;
-                } */
                 printf("Closing the connection...\n");
+                printStatistics();
                 return TRUE;
             }
         }
@@ -430,7 +412,6 @@ int llclose(int showStatistics) {
     }
     return TRUE;
 }
-
 
 void startAlarm() {
     (void) signal(SIGALRM, alarmHandler);
@@ -550,6 +531,7 @@ int sendSETTrama(int fd) {
         }
 
         alarmCount++;
+        numberOfTimeOuts++;
     } while (alarmCount < connection.numTries);
 
     return -1;
@@ -568,7 +550,7 @@ void getSETTrama(int fd) {
 
 int sendRRtrama(char controlo,int fd){
 
-    controlo=!(controlo^0x00);
+    controlo = !(controlo ^ 0x00);
     char C= C_RR_R0 + (controlo << 5);
     char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_RR = write(fd, buffer, 5);
@@ -632,4 +614,15 @@ void printArrayHex(char* array, int length, char* label) {
     for(int i = 0; i < length; i++)
         printf("%.2x ", array[i]);
     putchar('\n');
+}
+
+void printStatistics() {
+    printf("======================================\n");
+    printf("File transmission statistics:\n");
+    printf("Number of I frames transmitted: %d\n", numberOfIframesSent);
+    printf("Number of I frames received: %d\n", numberOfIframesReceived);
+    printf("Number of positive ACK: %d\n", numberOfRRs);
+    printf("Number of negative ACK: %d\n", numberOfREJs);
+    printf("Number of time-outs: %d\n", numberOfTimeOuts);
+    printf("======================================\n");
 }
