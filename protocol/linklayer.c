@@ -261,17 +261,18 @@ int llwrite(char* buf, int bufSize) {
     char tramaI[2008], tramaRR[5], tramaREJ[5], buffer[2008];
 
     printf("%d\n",bufSize);
+    alarmCount=0;
 
     int response, state = 0, done = 0;;
     int tramaILength = generateITrama(tramaI, buf, bufSize);
 
     generateRRandREJTramas(tramaRR, tramaREJ, sendNumber);
+    startAlarm();
 
     while(!done) {
         switch(state) {
             case 0:
                 response = write(fd, tramaI, tramaILength);
-                startAlarm();
                 state = 1;
                 printf("ALARM COUNT: %d\n", alarmCount);
                 break;
@@ -280,6 +281,7 @@ int llwrite(char* buf, int bufSize) {
                 if(alarmEnabled) {
                     alarm(connection.timeOut);
                     alarmEnabled = 0;
+                    alarmCount++;
                 } 
                 
                 response = read(fd, buffer, 5);
@@ -302,7 +304,7 @@ int llwrite(char* buf, int bufSize) {
                    alarmCount++;
                 } else {
                     state = 0;
-                    alarmCount++;
+
                 }
                 break;
             default: break;
