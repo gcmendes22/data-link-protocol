@@ -257,6 +257,7 @@ int llread(char *package){
                 while (bytes_read==0) bytes_read = read(fd, buffer, MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta 
                 for (int i = 0 ; i < bytes_read; i++)   if (buffer[i] == F) flag_count++;
                 if(flag_count<2) return -1;
+                numberOfIframesReceived++;
                 while(buffer[frame_pos]!= F) frame_pos++;
                 while(buffer[frame_pos]== F) frame_pos++;
                 frame_pos++;
