@@ -301,7 +301,7 @@ int llwrite(char* buf, int bufSize) {
                     alarmEnabled = 0;
                     alarmCount++;
                     printf("Attempt %d\n", alarmCount);
-                    numberOfTimeOuts++;
+                    if(alarmCount == 2) numberOfTimeOuts += 2;
                 } 
                 
                 response = read(fd, buffer, 5);
