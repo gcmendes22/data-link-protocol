@@ -297,6 +297,8 @@ int llwrite(char* buf, int bufSize) {
                     alarm(connection.timeOut);
                     alarmEnabled = 0;
                     alarmCount++;
+                    printf("Attempt %d\n", alarmCount);
+                    numberOfTimeOuts++;
                 } 
                 
                 response = read(fd, buffer, 5);
@@ -304,7 +306,6 @@ int llwrite(char* buf, int bufSize) {
                 if(response <= 0) {
                     if(alarmCount < connection.numTries) {
                         state = 0;
-                        numberOfTimeOuts++;
                     } else return ERROR;
                 } else state = 2;
 
@@ -317,7 +318,6 @@ int llwrite(char* buf, int bufSize) {
                 } else if (memcmp(tramaREJ, buffer, 5) == 0) {
                     state = 0;
                     alarmCount++;
-                    numberOfTimeOuts++;
                     numberOfREJs++;
                 } else state = 0;
                 break;
@@ -358,6 +358,7 @@ int llclose(int showStatistics) {
                 alarmEnabled = 0;
                 alarmCount++;
                 numberOfTimeOuts++;
+                printf("Attempt %d\n", alarmCount);
             } else read(fd, buffer, 5);
 
             if(memcmp(buffer,discRX,5) == 0) break;
@@ -419,7 +420,6 @@ void startAlarm() {
 
 void alarmHandler(int signal) {
     alarmEnabled = 1;
-    printf("Attempt %d\n", alarmCount + 1);
 }
 
 int generateSUTrama(char* dest, char frameA, char frameC) {
@@ -529,8 +529,9 @@ int sendSETTrama(int fd) {
             printf("SET WAS SENT\n");
             return 1;
         }
-
+        
         alarmCount++;
+        printf("Attempt %d\n", alarmCount);
         numberOfTimeOuts++;
     } while (alarmCount < connection.numTries);
 
@@ -617,8 +618,10 @@ void printArrayHex(char* array, int length, char* label) {
 }
 
 void printStatistics() {
+    int role = connection.role;
     printf("======================================\n");
-    printf("File transmission statistics:\n");
+    printf("File transmission statistics ");
+    printf(role == TRANSMITTER ? "(Tx side):\n\n" : "(Rx side):\n\n");
     printf("Number of I frames transmitted: %d\n", numberOfIframesSent);
     printf("Number of I frames received: %d\n", numberOfIframesReceived);
     printf("Number of positive ACK: %d\n", numberOfRRs);
