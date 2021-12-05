@@ -298,6 +298,61 @@ int llread(char *package){
     return package_pos;
 }
 
+int llwrite(char* buf, int bufSize) {
+    char tramaI[2008], tramaRR[5], tramaREJ[5], buffer[2008];
+
+    alarmCount = 0;
+
+    int response, state = 0, done = 0;;
+    int tramaILength = generateITrama(tramaI, buf, bufSize);
+
+    generateRRandREJTramas(tramaRR, tramaREJ, sendNumber);
+    startAlarm();
+
+    while(!done) {
+        switch(state) {
+            case 0:
+                if ((response = write(fd, tramaI, tramaILength)) > 0) 
+                    numberOfIframesSent++;
+                state = 1;
+                break;
+            case 1:
+                
+                if(alarmEnabled) {
+                    alarm(connection.timeOut);
+                    alarmEnabled = 0;
+                    alarmCount++;
+                } 
+                
+                response = read(fd, buffer, 5);
+
+                if(response <= 0) {
+                    if(alarmCount < connection.numTries) {
+                        state = 0;
+                        numberOfTimeOuts++;
+                    } else return ERROR;
+                } else state = 2;
+
+                break;
+            case 2:
+                if (memcmp(tramaRR, buffer, 5) == 0) {
+                    sendNumber ^= 1;
+                    done = 1;
+                    numberOfRRs++;
+                } else if (memcmp(tramaREJ, buffer, 5) == 0) {
+                    state = 0;
+                    alarmCount++;
+                    numberOfTimeOuts++;
+                    numberOfREJs++;
+                } else state = 0;
+                break;
+            default: break;
+        }
+    }
+    return bufSize;
+}
+
+
 int llclose(int showStatistics) {
     int role = connection.role;
     char disc[5], ua[5];
