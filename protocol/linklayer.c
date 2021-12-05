@@ -1,6 +1,7 @@
 #include "linklayer.h"
 #include <signal.h>
 #include <unistd.h>
+#include <time.h>
 
 #define ERROR -1
 
@@ -105,6 +106,9 @@ void printArrayHex(char* array, int length, char* label);
 // Print protocol statistics
 void printStatistics();
 
+// Generate random error in data frame with a error prob = chance
+int generateRandomError(char* trama, int length, int chance);
+
 /***********************************************************************************/
 /*                                  IMPLEMENTATION                                 */
 /***********************************************************************************/
@@ -140,7 +144,7 @@ void setConnectionParameters(linkLayer connectionParameters) {
     connection.role = connectionParameters.role;
     connection.numTries = connectionParameters.numTries;
     connection.timeOut = connectionParameters.timeOut;
-    connection.baudRate = connectionParameters.baudRate;
+    // connection.baudRate = connectionParameters.baudRate;
 }
 
 int llopen(linkLayer connectionParameters) {
@@ -208,6 +212,9 @@ int llread(char *package){
 
     frame_pos++;            // avança para o controlo do header
     controlo = frame_pos;
+
+    if(buffer[controlo] != C_SET && buffer[controlo] != C_UA && buffer[controlo] != C_DISC)
+        generateRandomError(buffer, BUF_SIZE, 100);
 
     if(buffer[controlo] == Trama_lida) {      //verifica se a trama é repetida
         sendRRtrama(buffer[controlo], fd);   //se for envia ACK sem alterar o pacote
@@ -632,4 +639,22 @@ void printStatistics() {
     printf("Number of negative ACK: %d\n", numberOfREJs);
     printf("Number of time-outs: %d\n", numberOfTimeOuts);
     printf("======================================\n");
+}
+
+int generateRandomError(char* trama, int length, int chance) {
+    if(!trama) return ERROR;
+    if(length <= 0) return ERROR;
+    if(chance < 0 && chance > 100) return ERROR;
+    
+    srand(time(0));
+    int error = rand() % 101; 
+    int errorIndex;
+
+    if (error < chance) { // if occur error
+        do {
+            errorIndex = rand() % (length - 3) + 1; // calculate the index to set error
+        } while (trama[errorIndex] == ESCAPE_CHAR || trama[errorIndex] == F || trama[errorIndex] == 0x5D || trama[errorIndex] == 0x5E);
+        trama[errorIndex] = 0x00;
+    } 
+    return errorIndex;
 }
