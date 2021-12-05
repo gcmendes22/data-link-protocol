@@ -48,6 +48,9 @@ int readNumber = 0; // Rs
 
 enum State { START, FLAG_RCV, A_RCV, C_RCV, BCC_OK, DONE };
 
+int numberOfRRs = 0;
+int numberOfREJs = 0;
+
 // Set oldtio and newtio
 int configTermios();
 
@@ -130,12 +133,12 @@ int llopen(linkLayer connectionParameters) {
 
     fd = open(connection.serialPort, O_RDWR | O_NOCTTY );
     if (fd < 0) {
-        perror("Error: cannot open the serial port.");
+        perror("Error: Cannot open the serial port.");
         return ERROR;
     }
 
     if(configTermios() == ERROR) {
-        printf("Cannot set termios structure.\n");
+        printf("Error: Cannot set termios structure.\n");
         return ERROR;
     }
 
@@ -143,7 +146,7 @@ int llopen(linkLayer connectionParameters) {
     printf("New termios structure set\n");
 
     if(connection.role == NOT_DEFINED) {
-        perror("Error: role was not defined.\n");
+        perror("Error: Role was not defined.\n");
         return ERROR;
     }
 
@@ -158,7 +161,7 @@ int llopen(linkLayer connectionParameters) {
         Trama_lida=C_SET;
         char ua[5];
         generateSUTrama(ua, A_RX, C_UA);
-        if(sendTrama(ua, 5) == ERROR) printf("Cannot write UA\n");
+        if(sendTrama(ua, 5) == ERROR) printf("Error: Cannot write UA\n");
         return TRUE;
     }
 
@@ -266,7 +269,7 @@ int llwrite(char* buf, int bufSize) {
     int tramaILength = generateITrama(tramaI, buf, bufSize);
 
     generateRRandREJTramas(tramaRR, tramaREJ, sendNumber);
-
+    alarmCount = 0;
     while(!done) {
         switch(state) {
             case 0:
@@ -386,11 +389,17 @@ int llclose(int showStatistics) {
                     return TRUE;
                 } */
                 printf("Closing the connection...\n");
+                if(showStatistics == TRUE) {
+                    printf("==========================\nStatistics:\n");
+                    printf("Number of positives ACK: %d\n", numberOfRRs);
+                    printf("Number of negatives ACK: %d\n", numberOfREJs);
+                }
                 return TRUE;
             }
         }
         return TRUE;
     }
+    
     return TRUE;
 }
 
@@ -535,6 +544,7 @@ int sendRRtrama(char controlo,int fd){
     char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_RR = write(fd, buffer, 5);
     if(bytes_RR < 0) return ERROR;
+    numberOfRRs++;
     return bytes_RR;
 }
 
@@ -544,6 +554,7 @@ int sendREJtrama(char controlo,int fd){
     char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_REJ = write(fd, buffer, 5);
     if(bytes_REJ < 0) return ERROR;
+    numberOfREJs++;
     return bytes_REJ;
 }
 
