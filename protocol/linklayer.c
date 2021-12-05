@@ -212,6 +212,9 @@ int llread(char *package){
         sendRRtrama(buffer[controlo], fd);   //se for envia ACK sem alterar o pacote
         return 0;
     }
+    
+    if(buffer[frame_pos]==C_DISC && buffer[frame_pos+1] == (BCC_DISC)) return -1;
+
 
     Trama_lida = buffer[controlo];   //grava o numero de sequência;
     frame_pos++;      //avança para a data do pacote
