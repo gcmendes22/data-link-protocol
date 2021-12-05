@@ -140,6 +140,7 @@ void setConnectionParameters(linkLayer connectionParameters) {
     connection.role = connectionParameters.role;
     connection.numTries = connectionParameters.numTries;
     connection.timeOut = connectionParameters.timeOut;
+    connection.baudRate = connectionParameters.baudRate;
 }
 
 int llopen(linkLayer connectionParameters) {
