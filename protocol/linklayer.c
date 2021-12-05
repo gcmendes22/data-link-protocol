@@ -214,7 +214,7 @@ int llread(char *package){
     controlo = frame_pos;
 
     if(buffer[controlo] != C_SET && buffer[controlo] != C_UA && buffer[controlo] != C_DISC)
-        generateRandomError(buffer, BUF_SIZE, 100);
+        generateRandomError(buffer, bytes_read, 100);
 
     if(buffer[controlo] == Trama_lida) {      //verifica se a trama é repetida
         sendRRtrama(buffer[controlo], fd);   //se for envia ACK sem alterar o pacote
