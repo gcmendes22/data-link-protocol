@@ -188,14 +188,12 @@ int llopen(linkLayer connectionParameters) {
 }
 
 int llread(char *package){
-    int frame_pos = 0, package_pos = 0, controlo, bytes_read = 0, flag_count = 0, buffer2_pos = 0;
-    char buffer[BUF_SIZE], buffer2[BUF_SIZE];
+    int frame_pos = 0, package_pos = 0, controlo, bytes_read = 0, flag_count = 0,flag_pos;
+    char buffer[BUF_SIZE];
     char Bcc2 = 0x00;
 
     while(1) {
         int bytes_read = read(fd, buffer, BUF_SIZE);
-        if(bytes_read > 0) 
-                numberOfIframesReceived++;
 
         for (int i = 0 ; i < bytes_read; i++)
             if (buffer[i] == F) flag_count++;
@@ -203,139 +201,97 @@ int llread(char *package){
         if (flag_count == 2) break;
         flag_count = 0;
     }
+    numberOfIframesReceived++;
 
     while (buffer[frame_pos] != F) frame_pos++;
 
     while (buffer[frame_pos] == F) frame_pos++;  //avança até terminarem as flags no header(até o adress)
     
-    if (buffer[frame_pos] != 0x05) return -1; //verifica se o adress é o pretendido
 
     frame_pos++;            // avança para o controlo do header
     controlo = frame_pos;
-
-    if(buffer[controlo] != C_SET && buffer[controlo] != C_UA && buffer[controlo] != C_DISC)
-        generateRandomError(buffer, bytes_read, 100);
 
     if(buffer[controlo] == Trama_lida) {      //verifica se a trama é repetida
         sendRRtrama(buffer[controlo], fd);   //se for envia ACK sem alterar o pacote
         return 0;
     }
-    
-    if(buffer[frame_pos]==C_DISC && buffer[frame_pos+1] == (BCC_DISC)) return -1;
 
+    if(buffer[frame_pos]==C_DISC && buffer[frame_pos+1] == (BCC_DISC)) return ERROR;
 
     Trama_lida = buffer[controlo];   //grava o numero de sequência;
     frame_pos++;      //avança para a data do pacote
 
-    if (buffer[frame_pos] != (buffer[controlo] ^ buffer[controlo - 1])) return -1;
+    if (buffer[frame_pos] != (buffer[controlo] ^ buffer[controlo - 1])) return ERROR;
 
     frame_pos++;
+    flag_pos=frame_pos;
 
-    while (buffer[frame_pos] != F) {    //neste ciclo preenche-se o pacote com a data pretendida
-        if ((frame_pos == bytes_read-3) && (buffer[frame_pos] == 0x7d) && (buffer[frame_pos+1] == 0x5e || buffer[frame_pos + 1] == 0x5d)) { //faz o byte stuffing do controlo          
+    while(buffer[flag_pos] != F) flag_pos++;
+
+
+    while (frame_pos < flag_pos) {    //neste ciclo preenche-se o pacote com a data pretendida
+
+        if ((frame_pos == flag_pos-2) && (buffer[frame_pos] == 0x7d)) { //faz o byte stuffing do controlo        
             frame_pos++;
+
             if (buffer[frame_pos] == 0x5e) {  // se o byte for 0x7e
-                buffer2[buffer2_pos] = F;
-                buffer2_pos++;
-                frame_pos++;
-            } else if (buffer[frame_pos]==0x5d) {  // se o byte for 0x7d
-                buffer2[buffer2_pos] = 0x7e;
-                buffer2_pos++;
-                frame_pos++;
+                buffer[frame_pos] = F;
+            } 
+            else if (buffer[frame_pos]==0x5d) {  // se o byte for 0x7d
+                buffer[frame_pos] = 0x7d;    
             }
         }
 
-        if (frame_pos ==  bytes_read-2) {   //se a data esta corrompida pede para o pacote ser enviado de novo;    
+        else if (frame_pos ==  flag_pos-1) {   //se a data esta corrompida pede para o pacote ser enviado de novo;
+
             if (Bcc2 == buffer[frame_pos]) frame_pos++;
+
             else {
-                memset(buffer2, 0, buffer2_pos + 1);
+                memset(package, 0, package_pos+1);
+                memset(buffer,0,bytes_read);
                 sendREJtrama(buffer[controlo], fd);
                 bytes_read = 0;
                 Bcc2 = 0x00;
-                while (bytes_read <= 0) bytes_read = read(fd, buffer, MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta
-                buffer2_pos = 0;
+                frame_pos=0;
+                flag_count=0;
+                while (bytes_read==0) bytes_read = read(fd, buffer, MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta 
+                for (int i = 0 ; i < bytes_read; i++)   if (buffer[i] == F) flag_count++;
+                if(flag_count<2) return -1;
+                while(buffer[frame_pos]!= F) frame_pos++;
+                while(buffer[frame_pos]== F) frame_pos++;
+                frame_pos++;
+                if(buffer[frame_pos]!= Trama_lida) return -1;
+                if(buffer[frame_pos+1]!= (buffer[frame_pos-1]^buffer[frame_pos])) return -1;
+                package_pos = 0;
                 frame_pos = controlo + 2;
+                
             }
-        } else {
-            buffer2[buffer2_pos] = buffer[frame_pos];
-            Bcc2 ^= buffer2[package_pos];
-            frame_pos++;
-            buffer2_pos++;
-        }
-    }
+        } 
 
-    for (int i = 0; i < buffer2_pos; i++) {   // repara todos os possiveis bytes alterados
-        if (buffer2[i] == 0x7d) {
-            i++;
-            if (buffer2[i] == 0x5e) {  // se o byte for 0x7e
-                package[package_pos] = F;
-                package_pos++;
-            } else if (buffer2[i] == 0x5d) {
-                package[package_pos] = 0x7d;
-                package_pos++;
+        else {
+
+            if(buffer[frame_pos]==0x7d){
+                frame_pos++;
+
+                if (buffer[frame_pos] == 0x5e) {  // se o byte for 0x7e
+                    package[package_pos] = F;
+                } 
+                else if (buffer[frame_pos] == 0x5d) {
+                    package[package_pos] = 0x7d;
+                }
+
             }
-        } else {
-            package[package_pos] = buffer2[i];
+            
+            else  package[package_pos] = buffer[frame_pos];
+            Bcc2 ^= package[package_pos];
+            frame_pos++;
             package_pos++;
         }
     }
 
+
     sendRRtrama(buffer[controlo], fd); //manda o ACK
     return package_pos;
-}
-
-int llwrite(char* buf, int bufSize) {
-    char tramaI[2008], tramaRR[5], tramaREJ[5], buffer[2008];
-
-    alarmCount = 0;
-
-    int response, state = 0, done = 0;;
-    int tramaILength = generateITrama(tramaI, buf, bufSize);
-
-    generateRRandREJTramas(tramaRR, tramaREJ, sendNumber);
-    startAlarm();
-
-    while(!done) {
-        switch(state) {
-            case 0:
-                if ((response = write(fd, tramaI, tramaILength)) > 0) 
-                    numberOfIframesSent++;
-                state = 1;
-                break;
-            case 1:
-                
-                if(alarmEnabled) {
-                    alarm(connection.timeOut);
-                    alarmEnabled = 0;
-                    alarmCount++;
-                    printf("Attempt %d\n", alarmCount);
-                    if(alarmCount == 2) numberOfTimeOuts += 2;
-                } 
-                
-                response = read(fd, buffer, 5);
-
-                if(response <= 0) {
-                    if(alarmCount < connection.numTries) {
-                        state = 0;
-                    } else return ERROR;
-                } else state = 2;
-
-                break;
-            case 2:
-                if (memcmp(tramaRR, buffer, 5) == 0) {
-                    sendNumber ^= 1;
-                    done = 1;
-                    numberOfRRs++;
-                } else if (memcmp(tramaREJ, buffer, 5) == 0) {
-                    state = 0;
-                    alarmCount++;
-                    numberOfREJs++;
-                } else state = 0;
-                break;
-            default: break;
-        }
-    }
-    return bufSize;
 }
 
 int llclose(int showStatistics) {
@@ -453,6 +409,7 @@ int generateITrama(char* tramaI, char* buffer, int bufSize) {
     tramaI[++currentPosition] = (sendNumber == 0) ? BCC_I_S0 : BCC_I_S1;
 
     char bcc2 = generateBCC2Frame(buffer, bufSize);
+
     
     // byte stuffing on data
 
@@ -491,9 +448,9 @@ int generateITrama(char* tramaI, char* buffer, int bufSize) {
             tramaI[++currentPosition] = bcc2;
     }
 
-    tramaI[currentPosition]=F;
     currentPosition++;
-    return currentPosition;
+    tramaI[currentPosition]=F;
+    return currentPosition+1;
 }
 
 int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber) {
