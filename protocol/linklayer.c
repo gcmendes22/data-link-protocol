@@ -365,6 +365,8 @@ int llwrite(char* buf, int bufSize) {
                     alarm(connection.timeOut);
                     alarmEnabled = 0;
                     alarmCount++;
+                    state=0;
+                    numberOfTimeOuts++;
                 } 
                 
                 response = read(fd, buffer, 5);
@@ -372,7 +374,7 @@ int llwrite(char* buf, int bufSize) {
                 if(response <= 0) {
                     if(alarmCount < connection.numTries) {
                         state = 0;
-                        numberOfTimeOuts++;
+                        //numberOfTimeOuts++;
                     } else return ERROR;
                 } else state = 2;
 
@@ -384,10 +386,11 @@ int llwrite(char* buf, int bufSize) {
                     numberOfRRs++;
                 } else if (memcmp(tramaREJ, buffer, 5) == 0) {
                     state = 0;
-                    alarmCount++;
+                    //alarmCount++;
+                    alarmCount = 0;
                     numberOfTimeOuts++;
                     numberOfREJs++;
-                } else state = 0;
+                } else state = 1;
                 break;
             default: break;
         }
