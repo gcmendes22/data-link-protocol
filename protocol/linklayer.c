@@ -69,6 +69,8 @@ void startAlarm();
 // @return void
 void alarmHandler();
 
+int setBaudRate(int baudRate);
+
 // @brief Generate supervision (S) and unnumbered (U) tramas
 // @param dest: buffer to be filled with the generated SU trama
 // @param frameA: Adrress field of a generic SU
@@ -186,7 +188,45 @@ void setConnectionParameters(linkLayer connectionParameters) {
     connection.role = connectionParameters.role;
     connection.numTries = connectionParameters.numTries;
     connection.timeOut = connectionParameters.timeOut;
-    // connection.baudRate = connectionParameters.baudRate;
+    setBaudRate(connectionParameters.baudRate);
+    
+}
+int setBaudRate(int baudRate) {
+    switch(baudRate) {
+        case 0: connection.baudRate = B0; break;
+        case 50: connection.baudRate = B50; break;
+        case 75: connection.baudRate = B75; break;
+        case 110: connection.baudRate = B110; break;
+        case 134: connection.baudRate = B134; break;
+        case 150: connection.baudRate = B150; break;
+        case 200: connection.baudRate = B200; break;
+        case 300: connection.baudRate = B300; break;
+        case 600: connection.baudRate = B600; break;
+        case 1200: connection.baudRate = B1200; break;
+        case 1800: connection.baudRate = B1800; break;
+        case 2400: connection.baudRate = B2400; break;
+        case 4800: connection.baudRate = B4800; break;
+        case 9600: connection.baudRate = B9600; break;
+        case 19200: connection.baudRate = B19200; break;
+        case 38400: connection.baudRate = B38400; break;
+        case 57600: connection.baudRate = B57600; break;
+        case 115200: connection.baudRate = B115200; break;
+        case 230400: connection.baudRate = B230400; break;
+        case 460800: connection.baudRate = B460800; break;
+        case 500000: connection.baudRate = 5000000; break;
+        case 576000: connection.baudRate = B576000; break;
+        case 921600: connection.baudRate = B921600; break;
+        case 1000000: connection.baudRate = B1000000; break;
+        case 1152000: connection.baudRate = B1152000; break;
+        case 1500000: connection.baudRate = B1500000; break;
+        case 2000000: connection.baudRate = B2000000; break;
+        case 2500000: connection.baudRate = B2500000; break;
+        case 3000000: connection.baudRate = B3000000; break;
+        case 3500000: connection.baudRate = B3500000; break;
+        case 4000000: connection.baudRate = B4000000; break;
+        default: return ERROR;
+    }
+    return TRUE;
 }
 
 int llopen(linkLayer connectionParameters) {
@@ -224,7 +264,7 @@ int llopen(linkLayer connectionParameters) {
         Trama_lida=C_SET;
         char ua[5];
         generateSUTrama(ua, A_RX, C_UA);
-        if(sendTrama(ua, 5) == ERROR) printf("Error: Cannot write UA\n");
+        if(sendTrama(fd, ua, 5) == ERROR) printf("Error: Cannot write UA\n");
         return TRUE;
     }
 
@@ -415,7 +455,7 @@ int llclose(int showStatistics) {
 
         while(1) {
             if(alarmEnabled){
-                if(sendTrama(disc, 5) == ERROR)  {
+                if(sendTrama(fd, disc, 5) == ERROR)  {
                     printf("Error: Cannot send DISC\n");
                     return ERROR;
                 }
@@ -437,7 +477,7 @@ int llclose(int showStatistics) {
 
         printf("Transmitter received DISC\n");
 
-        if(sendTrama(ua, 5) == ERROR) {
+        if(sendTrama(fd, ua, 5) == ERROR) {
             printf("Cannot send UA\n");
             return ERROR;
         } else{
@@ -464,7 +504,7 @@ int llclose(int showStatistics) {
         }
         if(state == DONE) {
             printf("Receiver received DISC\n");
-            if(sendTrama(disc, 5) == ERROR) {
+            if(sendTrama(fd, disc, 5) == ERROR) {
                 printf("Cannot write DISC\n");
                 return ERROR;
             } else {
@@ -568,7 +608,7 @@ int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber) {
     return 1;
 }
 
-int sendTrama(char* trama, int length) {
+int sendTrama(int fd, char* trama, int length) {
     if(write(fd, trama, length) < 0) return ERROR;
     else return TRUE;
 }
