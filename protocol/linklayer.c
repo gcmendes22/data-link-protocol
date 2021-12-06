@@ -58,8 +58,8 @@ int configTermios();
 
 // @brief Init link layer parameters
 // @param connectionParameters: link layer settings
-// @return void
-void setConnectionParameters(linkLayer connectionParameters);
+// @return int - 1 if success, -1 if error
+int setConnectionParameters(linkLayer connectionParameters);
 
 // @brief Start the alarm
 // @return void
@@ -69,6 +69,9 @@ void startAlarm();
 // @return void
 void alarmHandler();
 
+// @brief Set the baudrate to connection settings
+// @param baudRate: baudrate to be set
+// @return int - 1 if success, -1 if error
 int setBaudRate(int baudRate);
 
 // @brief Generate supervision (S) and unnumbered (U) tramas
@@ -183,12 +186,30 @@ int configTermios() {
     return TRUE;
 }
 
-void setConnectionParameters(linkLayer connectionParameters) {
+int setConnectionParameters(linkLayer connectionParameters) {
+    if(connectionParameters.role != RECEIVER || connectionParameters.role != TRANSMITTER) {
+        printf("Error: Invalid role.\n");
+        return ERROR;
+    }
+    if(connectionParameters.numTries <= 0) {
+        printf("Error: Invalid number of tries\n");
+        return ERROR;
+    }
+    if(connectionParameters.timeOut < 0) {
+        printf("Error: Invalid timeout.\n");
+        return ERROR;
+    }
+    if(setBaudRate(connectionParameters.baudRate) < 0) {
+        printf("Error: Invalid baudrate.\n");
+        return ERROR;
+    }
+
     sprintf(connection.serialPort, "%s", connectionParameters.serialPort);
     connection.role = connectionParameters.role;
     connection.numTries = connectionParameters.numTries;
     connection.timeOut = connectionParameters.timeOut;
-    setBaudRate(connectionParameters.baudRate);
+
+    return TRUE;
     
 }
 int setBaudRate(int baudRate) {
@@ -230,7 +251,10 @@ int setBaudRate(int baudRate) {
 }
 
 int llopen(linkLayer connectionParameters) {
-    setConnectionParameters(connectionParameters);
+    if(setConnectionParameters(connectionParameters) < 0) {
+        printf("Cannot set connection parameters\n");
+        return ERROR;
+    }
 
     fd = open(connection.serialPort, O_RDWR | O_NOCTTY );
     if (fd < 0) {
@@ -523,7 +547,7 @@ void startAlarm() {
     (void) signal(SIGALRM, alarmHandler);
 }
 
-void alarmHandler(int signal) {
+void alarmHandler() {
     alarmEnabled = 1;
     printf("Attempt %d\n", alarmCount + 1);
 }
@@ -541,6 +565,7 @@ int generateSUTrama(char* dest, char frameA, char frameC) {
 }
 
 int generateITrama(char* tramaI, char* buffer, int bufSize) {
+    if(!buffer || bufSize < 0) return ERROR;
     int currentPosition = 0;
     tramaI[currentPosition] = F;
     tramaI[++currentPosition] = A_TX;
@@ -655,21 +680,21 @@ void getSETTrama(int fd) {
     }
 }
 
-int sendRRtrama(char controlo,int fd){
+int sendRRtrama(char controlo,int fd) {
 
     controlo = !(controlo ^ 0x00);
     char C= C_RR_R0 + (controlo << 5);
-    char buffer[5] = { F, A_RX , C , A_RX^C , F };
+    char buffer[5] = { F, A_RX , C , A_RX ^ C , F };
     int bytes_RR = write(fd, buffer, 5);
     if(bytes_RR < 0) return ERROR;
     numberOfRRs++;
     return bytes_RR;
 }
 
-int sendREJtrama(char controlo,int fd){
+int sendREJtrama(char controlo,int fd) {
 
     char C = C_REJ_R0 + (controlo << 5);
-    char buffer[5] = { F, A_RX , C , A_RX^C , F };
+    char buffer[5] = { F, A_RX , C , A_RX ^ C , F };
     int bytes_REJ = write(fd, buffer, 5);
     if(bytes_REJ < 0) return ERROR;
     numberOfREJs++;
