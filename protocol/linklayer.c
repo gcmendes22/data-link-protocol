@@ -35,12 +35,9 @@
 struct termios oldtio;
 struct termios newtio;
 
-volatile int STOP = FALSE;
-char read_data[BUF_SIZE];
 int fd;
 struct linkLayer connection;
 char Trama_lida;
-int read_count=0;
 
 int alarmEnabled = 1;
 int alarmCount = 0;
@@ -55,58 +52,103 @@ int numberOfTimeOuts = 0;
 int numberOfIframesSent = 0;
 int numberOfIframesReceived = 0;
 
-// Set oldtio and newtio
+// @brief Set oldtio and newtio
+// @return int - 1 if termios was configurated and -1 if occur error trying configurate termios
 int configTermios();
 
-// Init link layer parameters
+// @brief Init link layer parameters
+// @param connectionParameters: link layer settings
+// @return void
 void setConnectionParameters(linkLayer connectionParameters);
 
-// Start the alarm
+// @brief Start the alarm
+// @return void
 void startAlarm();
 
-// Activate the alarm
-void alarmHandler(int signal);
+// @brief Activate the alarm
+// @return void
+void alarmHandler();
 
-// Generate supervision and unnumbered tramas
+// @brief Generate supervision (S) and unnumbered (U) tramas
+// @param dest: buffer to be filled with the generated SU trama
+// @param frameA: Adrress field of a generic SU
+// @param frameC: Control field of a generic SU
+// @return int - 1 if success, -1 if error
 int generateSUTrama(char* dest, char frameA, char frameC);
 
-// Generate information tramas
-int generateITrama(char* tramaI, char* buffer, int bufSize);
+// @brief Generate information tramas
+// @param tramaI: buffer to be filled with the generated I trama
+// @param payload: payload to be introduced on the I trama
+// @return int - length of I trama
+int generateITrama(char* tramaI, char* payload, int payloadLength);
 
-// Generate RR and REJ based on Ns
+// @brief Generate RR and REJ based on Ns
+// @param tramaRR: buffer to be filled with the generated RR trama
+// @param tramaREJ: buffer to be filled with the generated REJ trama
+// @param sendNumber: send number
+// @return int - 1 if success, -1 if error
 int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber);
 
-// Send generic trama
-int sendTrama(char* trama, int length);
+// @brief Send generic trama
+// @param fd: file descriptor
+// @param trama: trama to be write in file
+// @param length: length of the trama
+// @return int - 1 if success, -1 if error
+int sendTrama(int fd, char* trama, int length);
 
-// Send UA trama
-int sendUATrama(int fd);
-
-// Send SET trama
+// @brief Send SET trama
+// @param fd: file descriptor
+// @return int - 1 if success, -1 if error
 int sendSETTrama(int fd);
 
-// Get SET trama
+// @brief Get SET trama
+// @param fd: file descriptor
+// @return void
 void getSETTrama(int fd);
 
-// Send a REJ trama
-int sendREJtrama(char controlo,int fd);
+// @brief Send a REJ trama
+// @param control: control byte to create Control field
+// @param fd: file descriptor
+// @return int - length of REJ trama
+int sendREJtrama(char control, int fd);
 
-// Send a RR trama
-int sendRRtrama(char controlo,int fd);
+// @brief Send a RR trama
+// @param control: control byte to create Control field
+// @param fd: file descriptor
+// @return int - length of RR trama
+int sendRRtrama(char control, int fd);
 
-// Generate BCC2 frame
+// @brief Generate BCC2 frame
+// @param buffer: data buffer used to be compared
+// @param bufSize: buffer size
+// @return char - generated BCC2
 char generateBCC2Frame(char* buffer, int bufSize);
 
-// State machine (SET, UA, DISC)
+// @brief State machine (SET, UA, DISC)
+// @param state: current state
+// @param flag: flag to indicate when the state is changed
+// @param A: address field
+// @param C: control field
+// @param BCC: block check character
+// @return void
 void stateMachine(enum State* state, char flag, char A, char C, char BCC);
 
-// Print an array in hexadecimal (debugging use only)
+// @brief Print an array in hexadecimal (debugging use only)
+// @param array: array to be printed
+// @param length: array size
+// @param label: label to print
+// @return void
 void printArrayHex(char* array, int length, char* label);
 
-// Print protocol statistics
+// @brief Print protocol statistics
+// @return void
 void printStatistics();
 
-// Generate random error in data frame with a error prob = chance
+// @brief Generate random error in data frame with a error prob = chance
+// @param trama: trama to put the error
+// @param length: trama size
+// @param chance: probability to generate error
+// @return int - error index position
 int generateRandomError(char* trama, int length, int chance);
 
 /***********************************************************************************/
@@ -172,6 +214,7 @@ int llopen(linkLayer connectionParameters) {
     if(connection.role == TRANSMITTER) {
         if(sendSETTrama(fd) == TRUE){ 
             return TRUE;
+
         }
     }
 
@@ -180,7 +223,7 @@ int llopen(linkLayer connectionParameters) {
         Trama_lida=C_SET;
         char ua[5];
         generateSUTrama(ua, A_RX, C_UA);
-        if(sendTrama(ua, 5) == ERROR) printf("Error: Cannot write UA\n");
+        if(sendTrama(fd, ua, 5) == ERROR) printf("Error: Cannot write UA\n");
         return TRUE;
     }
 
@@ -352,7 +395,6 @@ int llwrite(char* buf, int bufSize) {
     return bufSize;
 }
 
-
 int llclose(int showStatistics) {
     int role = connection.role;
     char disc[5], ua[5];
@@ -375,7 +417,7 @@ int llclose(int showStatistics) {
 
         while(1) {
             if(alarmEnabled){
-                if(sendTrama(disc, 5) == ERROR)  {
+                if(sendTrama(fd, disc, 5) == ERROR)  {
                     printf("Error: Cannot send DISC\n");
                     return ERROR;
                 }
@@ -398,7 +440,7 @@ int llclose(int showStatistics) {
 
         printf("Transmitter received DISC\n");
 
-        if(sendTrama(ua, 5) == ERROR) {
+        if(sendTrama(fd, ua, 5) == ERROR) {
             printf("Cannot send UA\n");
             return ERROR;
         } else{
@@ -425,7 +467,7 @@ int llclose(int showStatistics) {
         }
         if(state == DONE) {
             printf("Receiver received DISC\n");
-            if(sendTrama(disc, 5) == ERROR) {
+            if(sendTrama(fd, disc, 5) == ERROR) {
                 printf("Cannot write DISC\n");
                 return ERROR;
             } else {
@@ -444,7 +486,7 @@ void startAlarm() {
     (void) signal(SIGALRM, alarmHandler);
 }
 
-void alarmHandler(int signal) {
+void alarmHandler() {
     alarmEnabled = 1;
 }
 
@@ -460,20 +502,20 @@ int generateSUTrama(char* dest, char frameA, char frameC) {
     return 1;
 }
 
-int generateITrama(char* tramaI, char* buffer, int bufSize) {
+int generateITrama(char* tramaI, char* payload, int payloadLength) {
     int currentPosition = 0;
     tramaI[currentPosition] = F;
     tramaI[++currentPosition] = A_TX;
     tramaI[++currentPosition] = (sendNumber == 0) ? C_I_S0 : C_I_S1;
     tramaI[++currentPosition] = (sendNumber == 0) ? BCC_I_S0 : BCC_I_S1;
 
-    char bcc2 = generateBCC2Frame(buffer, bufSize);
+    char bcc2 = generateBCC2Frame(payload, payloadLength);
 
     
     // byte stuffing on data
 
-    for(int i = 0; i < bufSize; i++) {
-        switch(buffer[i]) {
+    for(int i = 0; i < payloadLength; i++) {
+        switch(payload[i]) {
             case F:
 
                 tramaI[++currentPosition] = ESCAPE_CHAR;
@@ -486,7 +528,8 @@ int generateITrama(char* tramaI, char* buffer, int bufSize) {
                 break;
             
             default:
-                tramaI[++currentPosition] = buffer[i];
+                tramaI[++currentPosition] = payload[i];
+                break;
         }    
     }
 
@@ -508,8 +551,8 @@ int generateITrama(char* tramaI, char* buffer, int bufSize) {
     }
 
     currentPosition++;
-    tramaI[currentPosition]=F;
-    return currentPosition+1;
+    tramaI[currentPosition] = F;
+    return currentPosition + 1;
 }
 
 int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber) {
@@ -528,7 +571,7 @@ int generateRRandREJTramas(char* tramaRR, char* tramaREJ, int sendNumber) {
     return 1;
 }
 
-int sendTrama(char* trama, int length) {
+int sendTrama(int fd, char* trama, int length) {
     if(write(fd, trama, length) < 0) return ERROR;
     else return TRUE;
 }
@@ -536,6 +579,7 @@ int sendTrama(char* trama, int length) {
 int sendSETTrama(int fd) {
     char set[5];
     generateSUTrama(set, A_TX, C_SET);
+
     char flag;
     enum State state = START;
     startAlarm();
@@ -576,10 +620,10 @@ void getSETTrama(int fd) {
     }
 }
 
-int sendRRtrama(char controlo,int fd){
+int sendRRtrama(char control, int fd){
 
-    controlo = !(controlo ^ 0x00);
-    char C= C_RR_R0 + (controlo << 5);
+    control = !(control ^ 0x00);
+    char C= C_RR_R0 + (control << 5);
     char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_RR = write(fd, buffer, 5);
     if(bytes_RR < 0) return ERROR;
@@ -587,9 +631,9 @@ int sendRRtrama(char controlo,int fd){
     return bytes_RR;
 }
 
-int sendREJtrama(char controlo,int fd){
+int sendREJtrama(char control, int fd){
 
-    char C = C_REJ_R0 + (controlo << 5);
+    char C = C_REJ_R0 + (control << 5);
     char buffer[5] = { F, A_RX , C , A_RX^C , F };
     int bytes_REJ = write(fd, buffer, 5);
     if(bytes_REJ < 0) return ERROR;
