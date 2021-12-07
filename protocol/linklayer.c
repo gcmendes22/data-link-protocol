@@ -234,7 +234,7 @@ int setBaudRate(int baudRate) {
         case 115200: connection.baudRate = B115200; break;
         case 230400: connection.baudRate = B230400; break;
         case 460800: connection.baudRate = B460800; break;
-        case 500000: connection.baudRate = 5000000; break;
+        case 500000: connection.baudRate = B500000; break;
         case 576000: connection.baudRate = B576000; break;
         case 921600: connection.baudRate = B921600; break;
         case 1000000: connection.baudRate = B1000000; break;
