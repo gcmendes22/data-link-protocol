@@ -187,7 +187,7 @@ int configTermios() {
 }
 
 int setConnectionParameters(linkLayer connectionParameters) {
-    if(connectionParameters.role != RECEIVER || connectionParameters.role != TRANSMITTER) {
+    if(connectionParameters.role != RECEIVER && connectionParameters.role != TRANSMITTER) {
         printf("Error: Invalid role.\n");
         return ERROR;
     }
