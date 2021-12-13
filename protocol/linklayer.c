@@ -303,11 +303,12 @@ int llread(char *package){
     while(1) {
         int bytes_read = read(fd, buffer, BUF_SIZE);
 
-        for (int i = 0 ; i < bytes_read; i++)
-            if (buffer[i] == F) flag_count++;
-
-        if (flag_count == 2) break;
-        flag_count = 0;
+        if(bytes_read>0){
+            for (int i = 0 ; i < bytes_read; i++)
+                if (buffer[i] == F) flag_count++;
+            if (flag_count == 2) break;
+            flag_count = 0;
+        }
     }
     numberOfIframesReceived++;
 
@@ -362,14 +363,20 @@ int llread(char *package){
                 Bcc2 = 0x00;
                 frame_pos=0;
                 flag_count=0;
-                while (bytes_read==0) bytes_read = read(fd, buffer, MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta 
-                for (int i = 0 ; i < bytes_read; i++)   if (buffer[i] == F) flag_count++;
-                if(flag_count<2) return -1;
-                while(buffer[frame_pos]!= F) frame_pos++;
-                while(buffer[frame_pos]== F) frame_pos++;
-                frame_pos++;
-                if(buffer[frame_pos]!= Trama_lida) return -1;
-                if(buffer[frame_pos+1]!= (buffer[frame_pos-1]^buffer[frame_pos])) return -1;
+                while (1){ 
+                    bytes_read = read(fd, buffer, MAX_PAYLOAD_SIZE); //fica constantemente a ler até obter um resultado de volta 
+                    if(bytes_read > 0){
+                        for (int i = 0 ; i < bytes_read; i++)   if (buffer[i] == F) flag_count++;
+                        while(buffer[frame_pos]!= F) frame_pos++;
+                        while(buffer[frame_pos]== F) frame_pos++;
+                        frame_pos++;
+                        if(buffer[frame_pos]!= Trama_lida) return ERROR;
+                        controlo=frame_pos;
+                        if(buffer[frame_pos+1]!= (buffer[frame_pos-1]^buffer[frame_pos])) flag_count=0;
+                        if(flag_count>=2) break;
+                        else flag_count=0;
+                    }
+                }
                 package_pos = 0;
                 frame_pos = controlo + 2;
                 
@@ -400,6 +407,7 @@ int llread(char *package){
     sendRRtrama(buffer[controlo], fd); //manda o ACK
     return package_pos;
 }
+
 
 int llwrite(char* buf, int bufSize) {
     char tramaI[2008], tramaRR[5], tramaREJ[5], buffer[2008];
